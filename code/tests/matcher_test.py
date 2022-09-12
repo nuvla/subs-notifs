@@ -464,6 +464,71 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert value_bytes == rx.total
         assert 4 * 1024 ** 4 == rx.prev
 
+    def test_match_went_onoffline(self):
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
+        assert False is nem._went_online()
+        assert False is nem._went_offline()
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': True}))
+        assert False is nem._went_online()
+        assert False is nem._went_offline()
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': False}))
+        assert False is nem._went_online()
+        assert False is nem._went_offline()
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': False}))
+        assert True is nem._went_online()
+        assert False is nem._went_offline()
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': True}))
+        assert False is nem._went_online()
+        assert True is nem._went_offline()
+
+    def test_match_online(self):
+        sc = SubscriptionConfig(
+            {'criteria': {
+                'metric': 'foo',
+                'kind': 'boolean',
+                'condition': 'bar',
+                'value': 'true'
+            }})
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
+        assert None is nem.match_online(sc)
+
+        sc = SubscriptionConfig(
+            {'criteria': {
+                'metric': 'state',
+                'kind': 'boolean',
+                'condition': 'no',
+                'value': 'true'
+            }})
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': True}))
+        assert None is nem.match_online(sc)
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': False}))
+        assert None is nem.match_online(sc)
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': True}))
+        assert nem.MATCHED is nem.match_online(sc)
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': False}))
+        assert nem.MATCHED_RECOVERY is nem.match_online(sc)
+
     def test_match_all_none(self):
         sc = SubscriptionConfig({
             'id': 'foo',

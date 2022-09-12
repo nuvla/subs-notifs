@@ -53,5 +53,13 @@ class NuvlaEdgeNotificationBuilder(dict):
         self['recovery'] = recovery
         return self
 
+    def condition(self, condition: str):
+        self['condition'] = condition
+        return self
+
+    def condition_value(self, condition: str):
+        self['condition_value'] = condition
+        return self
+
     def build(self):
         return self

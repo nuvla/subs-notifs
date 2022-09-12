@@ -1,21 +1,18 @@
-## UC3 load: multi user multi NE
+## UC4: NE online/offline
 
-Goal: Subscriptions are not overwritten and both users receive notifications on
-the telemetry changes of the same NB.
+Goal: NE online/offline state changes are covered by the notifications.
 
 ### Create subscriptions
 
-User `user/01` and `user/02` are subscribed to RAM `>` 90% on NEs with tag 
-`x86-64`.
+User `user/01` is subscribed to NE online/offline on NEs with tag `x86-64`.
 
-Two NEs are sending telemetry: `ne/01` and `ne/02`. Both NEs are owned by the
-users. Only `ne/02` has tag `x86-64`.
+Two NE is sending telemetry: `ne/01`.
 
 Produce subscriptions to `subscription-config` topic:
 
 ```bash
 export PYTHONPATH=~/SixSq/code/nuvla/notifications/code/src:$PYTHONPATH
-./gen-subs-config-ram.py 
+./gen-subs-config-onoff.py 
 ```
 
 Check:
@@ -43,27 +40,27 @@ To run scripts below, export:
 export PYTHONPATH=~/SixSq/code/nuvla/notifications/code/src:$PYTHONPATH
 ```
 
-1. Input: `ne/01` and `ne/02` RAM is below 90%. Output: nothing in `NOTIFICATION_S`
+1. Input: `ne/01` ONLINE and ONLINE_PREV are True. Output: nothing in `NOTIFICATION_S`
    ```bash
-   ./gen-ne-ram-m1.py
+   ./gen-ne-onoff-m1.py
    ```
-2. Input: `ne/01` and `ne/02` RAM moves above 90%. Output: notification on `ne/02`
-   for `user/02` and `user/02` in `NOTIFICATION_S`
+2. Input: `ne/01` ONLINE is False and ONLINE_PREV is True. Output: notification on `ne/01`
+   for `user/01` with `recovery` False in `NOTIFICATION_S`
    ```bash
-   ./gen-ne-ram-m2.py
+   ./gen-ne-onoff-m2.py
    ```
-3. Input: `ne/01` and `ne/02` RAM is above 90%. Output: nothing in `NOTIFICATION_S`
+3. Input: `ne/01` ONLINE and ONLINE_PREV are False. Output: nothing in `NOTIFICATION_S`
    ```bash
-   ./gen-ne-ram-m3.py
+   ./gen-ne-onoff-m3.py
    ```
-4. Input: `ne/01` and `ne/02` RAM moves below 90%. Output: recover message on `ne/02`
-   for `user/02` and `user/02` in `NOTIFICATION_S`
+4. Input: `ne/01` ONLINE is True and ONLINE_PREV is False. Output: notification on `ne/01`
+   for `user/01` with `recovery` True in `NOTIFICATION_S`
    ```bash
-   ./gen-ne-ram-m4.py
+   ./gen-ne-onoff-m4.py
    ```
 ### Delete subscriptions
 
 ```bash
 export PYTHONPATH=~/SixSq/code/nuvla/notifications/code/src:$PYTHONPATH
-./gen-subs-config-ram-delete.py 
+./gen-subs-config-onoff-delete.py 
 ```

@@ -152,6 +152,68 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
                 return {'interface': dev_name, 'value': val}
         return None
 
+    def _went_offline(self):
+        if self.m.get('ONLINE_PREV') and not self.m.get('ONLINE'):
+            return True
+        return False
+
+    def _went_online(self):
+        if self.m.get('ONLINE') and not self.m.get('ONLINE_PREV'):
+            return True
+        return False
+
+    def match_online(self, sc: SubscriptionConfig) -> Union[None, Dict]:
+        if sc.is_metric_cond('state', 'no'):
+            if self._went_offline():
+                return self.MATCHED
+            if self._went_online():
+                return self.MATCHED_RECOVERY
+        return None
+
+    def notif_build_net_rx(self, sc: SubscriptionConfig, res_m):
+        return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
+            .name(f'{res_m["interface"]} Rx above') \
+            .value(res_m['value']) \
+            .recovery(res_m.get('recovery', False)) \
+            .build()
+
+    def notif_build_net_tx(self, sc: SubscriptionConfig, res_m):
+        return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
+            .name(f'{res_m["interface"]} Tx above') \
+            .value(res_m['value']) \
+            .recovery(res_m.get('recovery', False)) \
+            .build()
+
+    def notif_build_load(self, sc: SubscriptionConfig, res_m):
+        return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
+            .name('NE load %') \
+            .value(self.metrics().load_pct_curr()) \
+            .recovery(res_m.get('recovery', False)) \
+            .build()
+
+    def notif_build_ram(self, sc: SubscriptionConfig, res_m):
+        return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
+            .name('NE ram %') \
+            .value(self.metrics().ram_pct_curr()) \
+            .recovery(res_m.get('recovery', False)) \
+            .build()
+
+    def notif_build_disk(self, sc: SubscriptionConfig, res_m):
+        return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
+            .name('NE disk %') \
+            .value(self.metrics().disk_pct_curr(sc)) \
+            .recovery(res_m.get('recovery', False)) \
+            .build()
+
+    def notif_build_online(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotificationBuilder:
+        return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
+            .name('NE online') \
+            .condition(str(res_m.get('recovery', False)).lower()) \
+            .recovery(res_m.get('recovery', False)) \
+            .value('') \
+            .condition_value('') \
+            .build()
+
     def match_all(self, subs_confs: List[SubscriptionConfig]) -> List[Dict]:
         res = []
         subs_on_resource = list(self.resource_subscriptions(subs_confs))
@@ -159,53 +221,42 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
                   self.metrics_id(), [x.get('id') for x in subs_on_resource])
         for sc in subs_on_resource:
             log.debug('Matching subscription %s on %s', sc.get("id"), self.metrics_id())
-            # network Rx/Tx
+            # network Rx
             res_m = self.network_rx_above_thld(sc)
             print(f'1 network_rx_above_thld... {res_m}')
             if res_m:
-                res.append(NuvlaEdgeNotificationBuilder(sc, self.metrics())
-                           .name(f'{res_m["interface"]} Rx above')
-                           .value(res_m['value'])
-                           .recovery(res_m.get('recovery', False))
-                           .build())
+                log.debug('Condition matched: %s', sc)
+                res.append(self.notif_build_net_rx(sc, res_m))
+            # network Tx
             res_m = self.network_tx_above_thld(sc)
             print(f'2 network_tx_above_thld... {res_m}')
             if res_m:
-                res.append(NuvlaEdgeNotificationBuilder(sc, self.metrics())
-                           .name(f'{res_m["interface"]} Tx above')
-                           .value(res_m['value'])
-                           .recovery(res_m.get('recovery', False))
-                           .build())
+                log.debug('Condition matched: %s', sc)
+                res.append(self.notif_build_net_tx(sc, res_m))
             # CPU load
             res_m = self.match_load(sc)
             print(f'3 match_load... {res_m}')
             if res_m:
-                log.debug(f'Condition matched: {sc}')
-                res.append(NuvlaEdgeNotificationBuilder(sc, self.metrics())
-                           .name('NE load %')
-                           .value(self.metrics().load_pct_curr())
-                           .recovery(res_m.get('recovery', False))
-                           .build())
+                log.debug('Condition matched: %s', sc)
+                res.append(self.notif_build_load(sc, res_m))
             # RAM
             res_m = self.match_ram(sc)
             print(f'4 match_ram... {res_m}')
             if res_m:
-                log.debug(f'Condition matched: {sc}')
-                res.append(NuvlaEdgeNotificationBuilder(sc, self.metrics())
-                           .name('NE ram %')
-                           .value(self.metrics().ram_pct_curr())
-                           .recovery(res_m.get('recovery', False))
-                           .build())
+                log.debug('Condition matched: %s', sc)
+                res.append(self.notif_build_ram(sc, res_m))
             # Disk
             res_m = self.match_disk(sc)
             print(f'5 match_disk... {res_m}')
             if res_m:
-                log.debug(f'Condition matched: {sc}')
-                res.append(NuvlaEdgeNotificationBuilder(sc, self.metrics())
-                           .name('NE disk %')
-                           .value(self.metrics().disk_pct_curr(sc))
-                           .recovery(res_m.get('recovery', False))
-                           .build())
+                log.debug('Condition matched: %s', sc)
+                res.append(self.notif_build_disk(sc, res_m))
+            # Online
+            res_m = self.match_online(sc)
+            print(f'6 match_online... {res_m}')
+            if res_m:
+                log.debug('Condition matched: %s', sc)
+                res.append(self.notif_build_online(sc, res_m))
         return res
 
 
