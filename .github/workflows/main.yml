@@ -21,9 +21,12 @@ jobs:
           python-version: '3.8'
 
       - name: Run unit tests
+        working-directory: code
+        env:
+          PYTHONPATH: .
         run: |
-          pip install -r code/requirements.tests.txt
-          pytest code/tests/ --junitxml=test-report.xml -v
+          pip install -r requirements.tests.txt
+          pytest tests/ --junitxml=test-report.xml -v
 
       - name: Multi-arch docker image build prerequired
         run: sudo docker run --privileged linuxkit/binfmt:v0.7
@@ -38,7 +41,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v1
         if: always()
         with:
-          files: test-report.xml
+          files: code/test-report.xml
 
   notify:
     if: always()
