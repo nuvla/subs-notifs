@@ -1,0 +1,55 @@
+name: "Test and build."
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '*.*.*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Run unit tests
+        run: |
+          pip install -r code/requirements.tests.txt
+          pytest code/tests/ --junitxml=test-report.xml -v
+
+      - name: Multi-arch docker image build prerequired
+        run: sudo docker run --privileged linuxkit/binfmt:v0.7
+
+      - name: Build and deploy on architecture
+        env:
+          DOCKER_USERNAME: ${{ secrets.SIXSQ_DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.SIXSQ_DOCKER_PASSWORD }}
+        run: ./container-release.sh
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v1
+        if: always()
+        with:
+          files: test-report.xml
+
+  notify:
+    if: always()
+    name: Post Workflow Status To Slack
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Slack Workflow Notification
+        uses: Gamesight/slack-workflow-status@master
+        with:
+          repo_token: ${{secrets.GITHUB_TOKEN}}
+          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
+          icon_emoji: ':rocket:'
