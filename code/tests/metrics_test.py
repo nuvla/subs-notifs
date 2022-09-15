@@ -94,7 +94,7 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         nerm = NuvlaEdgeResourceMetrics({
             'NETWORK': {'default_gw': gw_name},
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'},
-                          'NET-STATS': [
+                          'net-stats': [
                               gw,
                               {'interface': 'lo',
                                'bytes-transmitted': 1,

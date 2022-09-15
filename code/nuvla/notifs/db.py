@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
+from typing import Union
 import math
 import re
-from typing import Union
 
 from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
 
@@ -191,6 +191,9 @@ class RxTxDB:
                 self.set_rx(neid, v)
             for v in metrics.net_tx_all():
                 self.set_tx(neid, v)
+
+    def __len__(self):
+        return len(self.db)
 
     def __repr__(self):
         return str(self.db)

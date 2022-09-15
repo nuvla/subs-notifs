@@ -78,34 +78,34 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             'value': '90'}})
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 4.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 2.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_above_thld(sc)
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 2.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert False is nem._load_moved_above_thld(sc)
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 2.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 4.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_below_thld(sc)
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 3.5, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert False is nem._load_moved_below_thld(sc)
 
     def test_load_thld_over(self):
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 3.5, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         sc = SubscriptionConfig({
             'criteria': {
                 'kind': 'numeric',
@@ -114,15 +114,15 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert False is nem._load_moved_over_thld(sc)
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 4.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_over_thld(sc)
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 4.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_over_thld(sc)
 
     def test_match_load(self):
@@ -145,23 +145,23 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             }})
         # no change in load
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert None is nem.match_load(sc)
 
         # load increased above threshold
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 4.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert [True, False] == list(nem.match_load(sc).values())
 
         # load decreased below threshold and recovered
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 4.0, "capacity": 4, "topic": "cpu"}}}))
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert [True, True] == list(nem.match_load(sc).values())
 
     def test_ram_thld_above_below(self):
@@ -281,9 +281,9 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             }})
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}})
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
         rxtx_db = RxTxDB()
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
@@ -299,9 +299,9 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             }})
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}})
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
         rxtx_db = RxTxDB()
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
@@ -310,27 +310,27 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}}))
+            'NETWORK': {'default_gw': 'eth0'},
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert None is nem.network_rx_above_thld(sc)
         assert None is nem.network_tx_above_thld(sc)
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"},
-                          "NET-STATS": [
-                              {"interface": "eth0",
-                               "bytes-transmitted": 0,
-                               "bytes-received": 0},
-                              {"interface": "lo",
-                               "bytes-transmitted": 63742086112,
-                               "bytes-received": 63742086112
+            'NETWORK': {'default_gw': 'eth0'},
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
+                          'net-stats': [
+                              {'interface': 'eth0',
+                               'bytes-transmitted': 0,
+                               'bytes-received': 0},
+                              {'interface': 'lo',
+                               'bytes-transmitted': 63742086112,
+                               'bytes-received': 63742086112
                                }]},
-            "RESOURCES_PREV": {
-                "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}})
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
         rxtx_db = RxTxDB()
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
@@ -339,14 +339,14 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"},
-                          "NET-STATS": [
-                              {"interface": "eth0",
-                               "bytes-transmitted": 6 * 1024 ** 4,
-                               "bytes-received": 7 * 1024 ** 4},
-                              {"interface": "lo",
-                               "bytes-transmitted": 63742086112,
+            'NETWORK': {'default_gw': 'eth0'},
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
+                          'net-stats': [
+                              {'interface': 'eth0',
+                               'bytes-transmitted': 6 * 1024 ** 4,
+                               'bytes-received': 7 * 1024 ** 4},
+                              {'interface': 'lo',
+                               'bytes-transmitted': 63742086112,
                                "bytes-received": 63742086112
                                }]},
             "RESOURCES_PREV": {
@@ -355,6 +355,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         r_rx = nem.network_rx_above_thld(sc)
+        print(r_rx)
         assert {'interface': 'eth0', 'value': 7.0} == r_rx
         r_tx = nem.network_tx_above_thld(sc)
         assert None is r_tx
@@ -406,7 +407,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
             "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"NET-STATS": [
+            "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
                  "bytes-transmitted": 1 * 1024 ** 3,
                  "bytes-received": 2 * 1024 ** 3}]}})
@@ -420,7 +421,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
             "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"NET-STATS": [
+            "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
                  "bytes-transmitted": 1 * 1024 ** 4,
                  "bytes-received": 2 * 1024 ** 4}]}})
@@ -435,7 +436,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
             "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"NET-STATS": [
+            "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
                  "bytes-transmitted": 0,
                  "bytes-received": 3 * 1024 ** 3}]}})
@@ -450,7 +451,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
             "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"NET-STATS": [
+            "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
                  "bytes-transmitted": 0,
                  "bytes-received": 4 * 1024 ** 4}]}})
@@ -650,7 +651,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                            'RAM': {'used': 901, 'capacity': 1000, 'topic': 'ram'},
                            'DISKS': [{'used': 9.1, 'capacity': 10, 'device': 'disk0p1'},
                                      {'used': 9.1, 'capacity': 10, 'device': 'disk0p2'}],
-                           'NET-STATS': [
+                           'net-stats': [
                                {'interface': 'eth0',
                                 'bytes-transmitted': 5 * 1024 ** 4,
                                 'bytes-received': 0},

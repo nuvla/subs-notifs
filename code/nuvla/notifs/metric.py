@@ -57,7 +57,7 @@ class NuvlaEdgeResourceMetrics(ResourceMetrics):
     resources_prev = 'RESOURCES_PREV'
 
     net = 'NETWORK'
-    net_stats = 'NET-STATS'
+    net_stats = 'net-stats'
     net_tx = 'bytes-transmitted'
     net_rx = 'bytes-received'
 
