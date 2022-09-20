@@ -17,12 +17,20 @@ class NotificationPublisher:
         self.producer = kafka_producer()
 
     def publish(self, key: str, msg: dict, topic: str):
-        self.producer.send(topic,
-                           key=bytes(key, encoding='utf8'),
-                           value=bytes(json.dumps(msg), encoding='utf8'))
+        future = self.producer.send(topic,
+                                    key=bytes(key, encoding='utf8'),
+                                    value=bytes(json.dumps(msg),
+                                                encoding='utf8'))
+        if future:
+            log.debug('Kafka publish future value: %s', future.get(5))
+            if future.succeeded():
+                log.debug('Kafka publish future succeeded: %s', future)
+            else:
+                log.debug('Kafka publish future failed: %s', future)
 
     def publish_list(self, msgs: List[Dict], topic: str):
         for msg in msgs:
+            log.debug('Publishing to %s: %s', topic, msg)
             self.publish(msg['id'], msg, topic)
 
 
