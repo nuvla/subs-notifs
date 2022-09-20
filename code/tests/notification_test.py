@@ -115,6 +115,8 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         nescm = NuvlaEdgeSubsConfMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED_RECOVERY)
+        assert res['method_ids'] == sc.get('method-ids')
+        assert res['subs_description'] == sc.get('description')
         assert res['metric'] == 'NE online'
         assert res['condition'] == 'true'
         assert res['recovery'] is True
@@ -135,6 +137,8 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         nescm = NuvlaEdgeSubsConfMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED)
+        assert res['method_ids'] == sc.get('method-ids')
+        assert res['subs_description'] == sc.get('description')
         assert res['metric'] == 'NE online'
         assert res['condition'] == 'false'
         assert res['recovery'] is False
