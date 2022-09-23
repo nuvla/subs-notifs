@@ -6,8 +6,12 @@ import re
 from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
 
 
-def bytes_to_gb(value_bytes) -> float:
-    return round(value_bytes / math.pow(1024, 4), 2)
+def bytes_to_gb(value_bytes: int) -> float:
+    return round(value_bytes / math.pow(1024, 3), 2)
+
+
+def gb_to_bytes(value_gb: float) -> int:
+    return int(value_gb * math.pow(1024, 3))
 
 
 def now() -> datetime:

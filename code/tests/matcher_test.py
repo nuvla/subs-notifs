@@ -1,6 +1,6 @@
 import unittest
 
-from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb
+from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes
 from nuvla.notifs.matcher import SubscriptionConfigMatcher, \
     NuvlaEdgeSubsConfMatcher
 from nuvla.notifs.metric import ResourceMetrics, NuvlaEdgeResourceMetrics
@@ -343,8 +343,8 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
-                               'bytes-transmitted': 6 * 1024 ** 4,
-                               'bytes-received': 7 * 1024 ** 4},
+                               'bytes-transmitted': 6 * 1024 ** 3,
+                               'bytes-received': 7 * 1024 ** 3},
                               {'interface': 'lo',
                                'bytes-transmitted': 63742086112,
                                "bytes-received": 63742086112
@@ -409,28 +409,28 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             "NETWORK": {"default_gw": "eth0"},
             "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
-                 "bytes-transmitted": 1 * 1024 ** 3,
-                 "bytes-received": 2 * 1024 ** 3}]}})
+                 "bytes-transmitted": 1 * 1024 ** 2,
+                 "bytes-received": 2 * 1024 ** 2}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
-        assert 2 * 1024 ** 3 == rx.total
-        assert 2 * 1024 ** 3 == rx.prev
+        assert 2 * 1024 ** 2 == rx.total
+        assert 2 * 1024 ** 2 == rx.prev
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
             "NETWORK": {"default_gw": "eth0"},
             "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
-                 "bytes-transmitted": 1 * 1024 ** 4,
-                 "bytes-received": 2 * 1024 ** 4}]}})
+                 "bytes-transmitted": gb_to_bytes(1),
+                 "bytes-received": gb_to_bytes(2)}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
-        assert 2 * 1024 ** 4 == rx.total
-        assert 2 * 1024 ** 4 == rx.prev
+        assert gb_to_bytes(2) == rx.total
+        assert gb_to_bytes(2) == rx.prev
 
         # counter reset
         nerm = NuvlaEdgeResourceMetrics({
@@ -439,13 +439,13 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
                  "bytes-transmitted": 0,
-                 "bytes-received": 3 * 1024 ** 3}]}})
+                 "bytes-received": 300 * 1024 ** 2}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
-        assert 2 * 1024 ** 4 + 3 * 1024 ** 3 == rx.total
-        assert 3 * 1024 ** 3 == rx.prev
+        assert 2 * 1024 ** 3 + 300 * 1024 ** 2 == rx.total
+        assert 300 * 1024 ** 2 == rx.prev
 
         # above threshold
         nerm = NuvlaEdgeResourceMetrics({
@@ -454,16 +454,16 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             "RESOURCES": {"net-stats": [
                 {"interface": "eth0",
                  "bytes-transmitted": 0,
-                 "bytes-received": 4 * 1024 ** 4}]}})
+                 "bytes-received": gb_to_bytes(4)}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
-        value_bytes = 2 * 1024 ** 4 + 4 * 1024 ** 4
+        value_bytes = gb_to_bytes(6)
         value_gb = bytes_to_gb(value_bytes)
         assert {'interface': 'eth0', 'value': value_gb} == \
                nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
         assert value_bytes == rx.total
-        assert 4 * 1024 ** 4 == rx.prev
+        assert gb_to_bytes(4) == rx.prev
 
     def test_match_went_onoffline(self):
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
@@ -653,14 +653,14 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                                      {'used': 9.1, 'capacity': 10, 'device': 'disk0p2'}],
                            'net-stats': [
                                {'interface': 'eth0',
-                                'bytes-transmitted': 5 * 1024 ** 4,
+                                'bytes-transmitted': gb_to_bytes(5),
                                 'bytes-received': 0},
                                {'interface': 'lo',
                                 'bytes-transmitted': 0,
                                 'bytes-received': 0},
                                {'interface': 'wlan1',
                                 'bytes-transmitted': 0,
-                                'bytes-received': 5 * 1024 ** 4}
+                                'bytes-received': gb_to_bytes(5)}
                            ]},
              'RESOURCES_PREV': {
                  'CPU': {'load': 8.1, 'capacity': 10, 'topic': 'cpu'},

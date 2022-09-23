@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from mock import Mock
 
 import nuvla.notifs.db as db
-from nuvla.notifs.db import RxTx, RxTxDB, Window, bytes_to_gb, next_month_first_day
+from nuvla.notifs.db import RxTx, RxTxDB, Window, bytes_to_gb, gb_to_bytes, \
+    next_month_first_day
 
 
 class TestDBUtils(unittest.TestCase):
@@ -13,10 +14,21 @@ class TestDBUtils(unittest.TestCase):
         assert 0 == bytes_to_gb(1)
         assert 0 == bytes_to_gb(1024**1)
         assert 0 == bytes_to_gb(1024**2)
-        assert 0 == bytes_to_gb(1024**3)
-        assert 1 == bytes_to_gb(1024**4)
-        assert 3 == bytes_to_gb(3*1024**4)
-        assert 1.5 == bytes_to_gb(1024**4 + 510*1024**3)
+        assert 1 == bytes_to_gb(1024**3)
+        assert 3 == bytes_to_gb(3*1024**3)
+        assert 1.5 == bytes_to_gb(1024**3 + 510*1024**2)
+
+    def test_gb_to_bytes(self):
+        assert 0 == gb_to_bytes(0.0)
+        assert 1 * 1024 ** 3 == gb_to_bytes(1.)
+        assert 1288490188 == gb_to_bytes(1.2)
+        assert 5057323991 == gb_to_bytes(4.71)
+
+    def test_gb_to_bytes_to_gb(self):
+        assert 0 == bytes_to_gb(gb_to_bytes(0.0))
+        assert 1.0 == bytes_to_gb(gb_to_bytes(1.0))
+        assert 1.2 == bytes_to_gb(gb_to_bytes(1.2))
+        assert 4.71 == bytes_to_gb(gb_to_bytes(4.71))
 
 
 class TestRxTx(unittest.TestCase):
