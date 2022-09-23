@@ -76,6 +76,7 @@ class RxTx:
     def __init__(self, window: Union[None, Window] = None):
         self.total: int = 0
         self.prev: int = 0
+        self._above_thld = False
         self.window = window
 
     def set_window(self, window: Window):
@@ -84,7 +85,6 @@ class RxTx:
     def set(self, current: int):
         """
         :param current: current value of the counter
-        :param ts: timestamp
         :return:
         """
 
@@ -97,10 +97,20 @@ class RxTx:
 
         self._apply_window()
 
+    def get_above_thld(self) -> bool:
+        return self._above_thld
+
+    def set_above_thld(self):
+        self._above_thld = True
+
+    def reset_above_thld(self):
+        self._above_thld = False
+
     def reset(self):
         """Resting 'total' only. 'prev' is needed to compute next delta.
         """
         self.total = 0
+        self.reset_above_thld()
 
     def _apply_window(self):
         if self.window and self.window.need_update():
@@ -187,6 +197,18 @@ class RxTxDB:
     def reset(self, neid, iface, kind):
         if self.db:
             self.db[neid][iface][kind].reset()
+
+    def set_above_thld(self, neid, iface, kind):
+        if self.db:
+            self.db[neid][iface][kind].set_above_thld()
+
+    def get_above_thld(self, neid, iface, kind) -> bool:
+        if self.db:
+            return self.db[neid][iface][kind].get_above_thld()
+
+    def reset_above_thld(self, neid, iface, kind):
+        if self.db:
+            self.db[neid][iface][kind].reset_above_thld()
 
     def update(self, metrics: NuvlaEdgeResourceMetrics):
         neid = metrics.get('id')

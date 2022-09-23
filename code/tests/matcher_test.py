@@ -684,3 +684,103 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         ids_res = list(map(lambda x: x['id'], res))
         ids = set([f'subscription-config/0{i}' for i in range(1, 6)])
         assert set() == ids.difference(ids_res)
+
+    def test_net_rxtx_lifecycle_no_retrigger(self):
+
+        thold = 4.5
+
+        # User sets 4.5gb threshold for the notification.
+        sc_rx_wlan1 = SubscriptionConfig({
+            'id': 'subscription-config/04',
+            'name': 'NE network Rx',
+            'description': 'NE network Rx',
+            'method-ids': [
+                'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+            ],
+            'enabled': True,
+            'resource-filter': "tags='x86-64'",
+            'acl': {'owners': ['me']},
+            'criteria': {
+                'metric': 'network-rx',
+                'condition': '>',
+                'value': str(thold),
+                'kind': 'numeric',
+                'dev-name': 'eth0',
+                'window': '1d'
+            }})
+
+        # NuvlaEdge sends metric with value of 4.6gb total received data.
+        # This is 110mb above the threshold.
+        nerm = NuvlaEdgeResourceMetrics(
+            {'id': 'nuvlabox/01',
+             'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
+             'DESCRIPTION': 'None - self-registration number 220171415421241',
+             'TAGS': ['x86-64'],
+             'NETWORK': {'default_gw': 'eth0'},
+             'ONLINE': True,
+             'ONLINE_PREV': True,
+             'RESOURCES': {'net-stats': [
+                               {'interface': 'eth0',
+                                'bytes-transmitted': 0,
+                                'bytes-received': gb_to_bytes(thold + 0.1)}]},
+             'RESOURCES_PREV': {},
+             'TIMESTAMP': '2022-08-02T15:21:46Z',
+             'ACL': {'owners': ['me'],
+                     'view-data': ['group/elektron',
+                                   'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
+                                   'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
+        net_db = RxTxDB()
+        net_db.update(nerm)
+        nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
+
+        # The network metric matched the threshold condition.
+        res = nescm.match_all([sc_rx_wlan1])
+        assert 1 == len(res)
+        assert res[0]['subs_description'] == 'NE network Rx'
+        assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
+
+        # NuvlaEdge sends metric with value of 5.0gb total received data.
+        # This makes increment of 110mb and total 220mb above the 4.5 threshold.
+        nerm['RESOURCES']['net-stats'][0]['bytes-received'] = \
+            gb_to_bytes(thold + 0.2)
+        net_db.update(nerm)
+
+        # Because we already matched the condition (and it was persisted), the
+        # new match will not be triggered.
+        nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
+        res = nescm.match_all([sc_rx_wlan1])
+        assert 0 == len(res)
+
+        # The current window hasn't closed yet, but the user increases the
+        # threshold to 5gb.
+        thold = 5.5
+        sc_rx_wlan1['criteria']['value'] = str(thold)
+
+        resource = ('nuvlabox/01', 'eth0', 'rx')
+
+        # The metric that comes is below the newly set threshold.
+        # Result:
+        # a) the metric is not matched,
+        # b) "above_thold" flag on the RxTx value in the network DB is reset.
+        nerm['RESOURCES']['net-stats'][0]['bytes-received'] = \
+            gb_to_bytes(thold - 0.5)
+        net_db.update(nerm)
+        print(net_db.get(*resource))
+
+        nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
+        res = nescm.match_all([sc_rx_wlan1])
+        assert 0 == len(res)
+        assert False is net_db.get_above_thld(*resource)
+
+        # Metric goes above the new threshold and it is matched.
+        nerm['RESOURCES']['net-stats'][0]['bytes-received'] = \
+            gb_to_bytes(thold + 0.1)
+        net_db.update(nerm)
+
+        nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
+        # The network metric matched the threshold condition.
+        res = nescm.match_all([sc_rx_wlan1])
+        assert 1 == len(res)
+        assert res[0]['subs_description'] == 'NE network Rx'
+        assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
+        assert True is net_db.get_above_thld(*resource)

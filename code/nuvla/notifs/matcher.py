@@ -4,7 +4,8 @@ from nuvla.notifs.db import RxTxDB
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.metric import ResourceMetrics, NuvlaEdgeResourceMetrics, \
     MetricNotFound
-from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder
+from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
+    NuvlaEdgeNotification
 from nuvla.notifs.subscription import SubscriptionConfig
 
 log = get_logger('matcher')
@@ -50,7 +51,7 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
     def __init__(self, metrics: NuvlaEdgeResourceMetrics,
                  net_db: Union[None, RxTxDB] = None):
         super().__init__(metrics)
-        self._net_db = net_db
+        self._net_db: RxTxDB = net_db
 
     def _load_moved_above_thld(self, sc: SubscriptionConfig):
         return self.m.load_pct_prev() <= sc.criteria_value() < self.m.load_pct_curr()
@@ -148,8 +149,14 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
                     return None
             except KeyError:
                 return None
-            if val and val >= sc.criteria_value():
+            if val and val >= sc.criteria_value() and \
+                    not self._net_db.get_above_thld(m['id'], dev_name, kind):
+                self._net_db.set_above_thld(m['id'], dev_name, kind)
                 return {'interface': dev_name, 'value': val}
+            if val and val <= sc.criteria_value() and \
+                    self._net_db.get_above_thld(m['id'], dev_name, kind):
+                self._net_db.reset_above_thld(m['id'], dev_name, kind)
+
         return None
 
     def _went_offline(self):
@@ -170,42 +177,42 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
                 return self.MATCHED_RECOVERY
         return None
 
-    def notif_build_net_rx(self, sc: SubscriptionConfig, res_m):
+    def notif_build_net_rx(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
             .name(f'{res_m["interface"]} Rx above') \
             .value(res_m['value']) \
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_net_tx(self, sc: SubscriptionConfig, res_m):
+    def notif_build_net_tx(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
             .name(f'{res_m["interface"]} Tx above') \
             .value(res_m['value']) \
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_load(self, sc: SubscriptionConfig, res_m):
+    def notif_build_load(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
             .name('NE load %') \
             .value(self.metrics().load_pct_curr()) \
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_ram(self, sc: SubscriptionConfig, res_m):
+    def notif_build_ram(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
             .name('NE ram %') \
             .value(self.metrics().ram_pct_curr()) \
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_disk(self, sc: SubscriptionConfig, res_m):
+    def notif_build_disk(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
             .name('NE disk %') \
             .value(self.metrics().disk_pct_curr(sc)) \
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_online(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotificationBuilder:
+    def notif_build_online(self, sc: SubscriptionConfig, res_m) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self.metrics()) \
             .name('NE online') \
             .condition(str(res_m.get('recovery', False)).lower()) \
@@ -258,12 +265,3 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_online(sc, res_m))
         return res
-
-
-class MatcherFactory:
-    def __init__(self):
-        self._matchers = {}
-
-    def register_matcher(self, name: str, matcher: SubscriptionConfigMatcher):
-        self._matchers[name] = matcher
-

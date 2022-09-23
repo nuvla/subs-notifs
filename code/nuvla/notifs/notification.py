@@ -34,7 +34,7 @@ class NotificationPublisher:
             self.publish(msg['id'], msg, topic)
 
 
-class NuvlaEdgeNotificationBuilder(dict):
+class NuvlaEdgeNotification(dict):
     def __init__(self, sc: SubscriptionConfig, metrics: ResourceMetrics):
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
@@ -49,25 +49,30 @@ class NuvlaEdgeNotificationBuilder(dict):
                           'timestamp': metrics.timestamp(),
                           'recovery': False})
 
+
+class NuvlaEdgeNotificationBuilder:
+    def __init__(self, sc: SubscriptionConfig, metrics: ResourceMetrics):
+        self._n = NuvlaEdgeNotification(sc, metrics)
+
     def name(self, name: str):
-        self['metric'] = name
+        self._n['metric'] = name
         return self
 
     def value(self, value: Union[int, float]):
-        self['value'] = value
+        self._n['value'] = value
         return self
 
     def recovery(self, recovery: bool):
-        self['recovery'] = recovery
+        self._n['recovery'] = recovery
         return self
 
     def condition(self, condition: str):
-        self['condition'] = condition
+        self._n['condition'] = condition
         return self
 
     def condition_value(self, condition: str):
-        self['condition_value'] = condition
+        self._n['condition_value'] = condition
         return self
 
-    def build(self):
-        return self
+    def build(self) -> NuvlaEdgeNotification:
+        return self._n
