@@ -33,24 +33,28 @@ def ne_telem_process(msg, sc: SelfUpdatingDict, net_db: RxTxDB,
     nerm = NuvlaEdgeResourceMetrics(msg.value)
     net_db.update(nerm)
     log.info(f'net db: {net_db}')
-    nem = NuvlaEdgeSubsConfMatcher(nerm, net_db)
-    notifs = nem.match_all(sc[RESOURCE_KIND_NE].values())
-    log.info(f'To notify: {notifs}')
-    notif_publisher.publish_list(notifs, NOTIF_TOPIC)
+    if sc.get(RESOURCE_KIND_NE):
+        nem = NuvlaEdgeSubsConfMatcher(nerm, net_db)
+        notifs = nem.match_all(sc[RESOURCE_KIND_NE].values())
+        log.info(f'To notify: {notifs}')
+        notif_publisher.publish_list(notifs, NOTIF_TOPIC)
+    else:
+        log.warning('No %s subscriptions. Dropped: %s', RESOURCE_KIND_NE, msg)
 
 
-def wait_sc_populated(sc: SelfUpdatingDict, resource_kind: str, sleep=5, timeout=600):
-    ts_end = time.time() + timeout
+def wait_sc_populated(sc: SelfUpdatingDict, resource_kind: str, sleep=5, timeout=None):
+    ts_end = time.time() + timeout if timeout else None
     while not sc.get(resource_kind):
-        if time.time() >= ts_end:
-            log.warning(f'Stopped waiting {resource_kind} after {timeout} sec')
+        if ts_end and time.time() >= ts_end:
+            log.warning('Stopped waiting %s after %s sec', resource_kind, timeout)
             return
-        log.debug(f'waiting for {resource_kind} in subscription config: {list(sc.keys())}')
+        log.debug('waiting for %s in subscription config: %s', resource_kind,
+                  list(sc.keys()))
         time.sleep(sleep)
 
 
 def subs_notif_nuvla_edge_telemetry(sc: SelfUpdatingDict, net_db: RxTxDB):
-    wait_sc_populated(sc, RESOURCE_KIND_NE, timeout=120)
+    wait_sc_populated(sc, RESOURCE_KIND_NE, timeout=60)
 
     notif_publisher = NotificationPublisher()
 
@@ -68,12 +72,12 @@ def subs_notif_nuvla_edge_telemetry(sc: SelfUpdatingDict, net_db: RxTxDB):
 
 
 def subs_notif_data_record(sc: SelfUpdatingDict):
-    wait_sc_populated(sc, RESOURCE_KIND_DATARECORD, timeout=120)
+    wait_sc_populated(sc, RESOURCE_KIND_DATARECORD, timeout=60)
     log.info(f'Starting {RESOURCE_KIND_DATARECORD} processing...')
 
 
 def subs_notif_event(sc: SelfUpdatingDict):
-    wait_sc_populated(sc, RESOURCE_KIND_EVENT, timeout=120)
+    wait_sc_populated(sc, RESOURCE_KIND_EVENT, timeout=60)
     log.info(f'Starting {RESOURCE_KIND_EVENT} processing...')
 
 
