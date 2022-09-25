@@ -4,6 +4,7 @@ from pprint import pformat
 import signal
 import time
 import threading
+import traceback
 
 from nuvla.notifs.db import RxTxDB
 from nuvla.notifs.log import get_logger
@@ -67,7 +68,7 @@ def subs_notif_nuvla_edge_telemetry(sc: SelfUpdatingDict, net_db: RxTxDB):
         try:
             ne_telem_process(msg, sc, net_db, notif_publisher)
         except Exception as ex:
-            # TODO: print stacktrace
+            log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error(f'Failed processing {msg.key} with: {ex}')
 
 
