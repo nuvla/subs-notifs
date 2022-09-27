@@ -291,6 +291,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert None is nem.network_tx_above_thld(sc)
 
         sc = SubscriptionConfig({
+            'id': 'subscription-config/01',
             'criteria': {
                 'metric': 'network-rx',
                 'condition': '>',
@@ -310,7 +311,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            'NETWORK': {'default_gw': 'eth0'},
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
@@ -319,7 +320,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            'NETWORK': {'default_gw': 'eth0'},
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
@@ -339,7 +340,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            'NETWORK': {'default_gw': 'eth0'},
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
@@ -361,6 +362,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert None is r_tx
 
         sc = SubscriptionConfig({
+            'id': 'subscription-config/01',
             'criteria': {
                 'metric': 'network-tx',
                 'condition': '>',
@@ -389,9 +391,9 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         assert None is nem.network_tx_above_thld(sc)
-        assert {} == rxtx_db.db
 
         sc = SubscriptionConfig({
+            'id': 'subscription-config/01',
             'criteria': {
                 'metric': 'network-rx',
                 'condition': '>',
@@ -402,68 +404,194 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
-        assert {} == rxtx_db.db
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"net-stats": [
-                {"interface": "eth0",
-                 "bytes-transmitted": 1 * 1024 ** 2,
-                 "bytes-received": 2 * 1024 ** 2}]}})
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': 1 * 1024 ** 2,
+                 'bytes-received': 2 * 1024 ** 2}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
-        rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
+        rx: RxTx = rxtx_db.get_data('ne/1', 'eth0', 'rx')
         assert 2 * 1024 ** 2 == rx.total
         assert 2 * 1024 ** 2 == rx.prev
 
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"net-stats": [
-                {"interface": "eth0",
-                 "bytes-transmitted": gb_to_bytes(1),
-                 "bytes-received": gb_to_bytes(2)}]}})
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': gb_to_bytes(1),
+                 'bytes-received': gb_to_bytes(2)}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
-        rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
+        rx: RxTx = rxtx_db.get_data('ne/1', 'eth0', 'rx')
         assert gb_to_bytes(2) == rx.total
         assert gb_to_bytes(2) == rx.prev
 
         # counter reset
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"net-stats": [
-                {"interface": "eth0",
-                 "bytes-transmitted": 0,
-                 "bytes-received": 300 * 1024 ** 2}]}})
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': 0,
+                 'bytes-received': 300 * 1024 ** 2}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
-        rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
+        rx: RxTx = rxtx_db.get_data('ne/1', 'eth0', 'rx')
         assert 2 * 1024 ** 3 + 300 * 1024 ** 2 == rx.total
         assert 300 * 1024 ** 2 == rx.prev
 
         # above threshold
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'ne/1',
-            "NETWORK": {"default_gw": "eth0"},
-            "RESOURCES": {"net-stats": [
-                {"interface": "eth0",
-                 "bytes-transmitted": 0,
-                 "bytes-received": gb_to_bytes(4)}]}})
+            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': 0,
+                 'bytes-received': gb_to_bytes(4)}]}})
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         value_bytes = gb_to_bytes(6)
         value_gb = bytes_to_gb(value_bytes)
         assert {'interface': 'eth0', 'value': value_gb} == \
                nem.network_rx_above_thld(sc)
-        rx: RxTx = rxtx_db.db['ne/1']['eth0']['rx']
+        rx: RxTx = rxtx_db.get_data('ne/1', 'eth0', 'rx')
         assert value_bytes == rx.total
         assert gb_to_bytes(4) == rx.prev
+
+    def test_net_multiple_successive_subs_triggered(self):
+        """This tests dependence of the 'above threshold' flag in the network
+        DB on the individual subscription configurations.
+        """
+        sc1 = SubscriptionConfig({
+            'id': 'subscription-config/01',
+            'acl': {'owners': ['user/01']},
+            'category': 'notification',
+            'criteria': {'condition': '>',
+                         'dev-name': 'eth0',
+                         'kind': 'numeric',
+                         'metric': 'network-rx',
+                         'value': '2.5'},
+            'name': 'Rx > 2.5gb',
+            'description': 'Rx > 2.5gb',
+            'enabled': True,
+            'method-ids': [
+                'notification-method/419a0079-d4d4-4893-a6b5-f7645dd8fe59',
+                'notification-method/d3e800d5-79df-4af0-b57e-23d80b6152a5'],
+            'resource-filter': "tags='nuvlabox=True'",
+            'resource-kind': 'nuvlabox',
+            'resource-type': 'subscription-config'})
+        sc2 = SubscriptionConfig({
+            'id': 'subscription-config/02',
+            'acl': {'owners': ['user/02']},
+            'category': 'notification',
+            'criteria': {'condition': '>',
+                         'kind': 'numeric',
+                         'metric': 'network-rx',
+                         'value': '3.5'},
+            'name': 'Rx > 3.5gb',
+            'description': 'Rx > 3.5gb',
+            'enabled': True,
+            'method-ids': [
+                'notification-method/419a0079-d4d4-4893-a6b5-f7645dd8fe59'],
+            'resource-filter': "tags='nuvlabox=True'",
+            'resource-kind': 'nuvlabox',
+            'resource-type': 'subscription-config'})
+        sc3 = SubscriptionConfig({
+            'id': 'subscription-config/03',
+            'acl': {'owners': ['user/03']},
+            'category': 'notification',
+            'criteria': {'condition': '>',
+                         'kind': 'numeric',
+                         'metric': 'network-rx',
+                         'value': '9.5'},
+            'name': 'Rx > 9.5gb',
+            'description': 'Rx > 9.5gb',
+            'enabled': True,
+            'method-ids': [
+                'notification-method/419a0079-d4d4-4893-a6b5-f7645dd8fe59'],
+            'resource-filter': "tags='nuvlabox=True'",
+            'resource-kind': 'nuvlabox',
+            'resource-type': 'subscription-config'})
+
+        rxtx_db = RxTxDB()
+        nerm = NuvlaEdgeResourceMetrics({
+            'id': 'nuvlabox/01',
+            'NAME': 'NuvlaEdge Test',
+            'DESCRIPTION': 'NuvlaEdge Test 2',
+            'TAGS': ['nuvlabox=True'],
+            'ONLINE': True, 'ONLINE_PREV': True,
+            'NETWORK': {'default-gw': 'eth0'},
+            'TIMESTAMP': '2022-08-02T15:21:46Z',
+            'RESOURCES': {
+                'net-stats': [
+                    {'interface': 'eth0',
+                     'bytes-transmitted': 57112506,
+                     'bytes-received': gb_to_bytes(5)},
+                    {'interface': 'docker0',
+                     'bytes-transmitted': 0,
+                     'bytes-received': 0}]},
+            'ACL': {'owners': ['group/nuvla-admin'],
+                    'view-data': [
+                        'nuvlabox/1c56dc02-0c16-4423-a4b1-9265d855621d',
+                        'user/01',
+                        'user/02',
+                        'user/03']}})
+        # subs/01 and subs/02 do trigger, but subs/03 is above the threshold.
+        rxtx_db.update(nerm)
+        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        match_cs1 = nem.match_all([sc1])
+        assert 1 == len(match_cs1)
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
+        assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
+        assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
+        assert 'subscription-config/01' == match_cs1[0]['id']
+        match_cs2 = nem.match_all([sc2])
+        assert 1 == len(match_cs2)
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
+        assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
+        assert 'subscription-config/02' == match_cs2[0]['id']
+        match_cs1 = nem.match_all([sc3])
+        assert 0 == len(match_cs1)
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
+        assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
+
+        print(rxtx_db)
+
+        nerm['RESOURCES'] = {
+            'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': 57112506,
+                 'bytes-received': gb_to_bytes(10)},
+                {'interface': 'docker0',
+                 'bytes-transmitted': 0,
+                 'bytes-received': 0}]}
+        rxtx_db.update(nerm)
+        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        match_cs1 = nem.match_all([sc1])
+        assert 0 == len(match_cs1)
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
+        assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
+        match_cs2 = nem.match_all([sc2])
+        assert 0 == len(match_cs2)
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
+        assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
+        match_cs3 = nem.match_all([sc3])
+        assert 1 == len(match_cs3)
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
+        assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
 
     def test_match_went_onoffline(self):
         nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
@@ -644,7 +772,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
              'TAGS': ['x86-64'],
-             'NETWORK': {'default_gw': 'eth0'},
+             'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
              'ONLINE': True,
              'ONLINE_PREV': True,
              'RESOURCES': {'CPU': {'load': 9.1, 'capacity': 10, 'topic': 'cpu'},
@@ -681,8 +809,10 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         net_db.update(nerm)
         nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
         res = nescm.match_all([sc_disk, sc_load, sc_ram, sc_rx_wlan1, sc_tx_gw])
+        import pprint
+        pprint.pp(res)
         ids_res = list(map(lambda x: x['id'], res))
-        ids = set([f'subscription-config/0{i}' for i in range(1, 6)])
+        ids = set(f'subscription-config/0{i}' for i in range(1, 6))
         assert set() == ids.difference(ids_res)
 
     def test_net_rxtx_lifecycle_no_retrigger(self):
@@ -691,7 +821,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
         # User sets 4.5gb threshold for the notification.
         sc_rx_wlan1 = SubscriptionConfig({
-            'id': 'subscription-config/04',
+            'id': 'subscription-config/01',
             'name': 'NE network Rx',
             'description': 'NE network Rx',
             'method-ids': [
@@ -716,7 +846,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
              'TAGS': ['x86-64'],
-             'NETWORK': {'default_gw': 'eth0'},
+             'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
              'ONLINE': True,
              'ONLINE_PREV': True,
              'RESOURCES': {'net-stats': [
@@ -770,7 +900,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
         res = nescm.match_all([sc_rx_wlan1])
         assert 0 == len(res)
-        assert False is net_db.get_above_thld(*resource)
+        assert False is net_db.get_above_thld(*resource, 'subscription-config/01')
 
         # Metric goes above the new threshold and it is matched.
         nerm['RESOURCES']['net-stats'][0]['bytes-received'] = \
@@ -783,4 +913,4 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert 1 == len(res)
         assert res[0]['subs_description'] == 'NE network Rx'
         assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
-        assert True is net_db.get_above_thld(*resource)
+        assert True is net_db.get_above_thld(*resource, 'subscription-config/01')

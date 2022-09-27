@@ -35,7 +35,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
              'TAGS': ['arch=x86-64'],
-             'NETWORK': {'default_gw': 'eth0'},
+             'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
              'ONLINE': True,
              'ONLINE_PREV': True,
              'RESOURCES': {'CPU': {'load': 5.52, 'capacity': 4, 'topic': 'cpu'},

@@ -66,11 +66,11 @@ class TestNetworkDB(unittest.TestCase):
 
     def test_init(self):
         ndb = RxTxDB()
-        assert 0 == len(ndb.db)
+        assert ndb._db is not None
 
     def test_set_get(self):
         ndb = RxTxDB()
-        assert 0 == len(ndb.db)
+        assert ndb._db is not None
 
         ndb.set_rx('foo', {'interface': 'eth0', 'value': 0})
         assert 0 == ndb.get_rx('foo', 'eth0')

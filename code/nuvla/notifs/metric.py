@@ -53,13 +53,14 @@ class ResourceMetrics(dict):
 
 class NuvlaEdgeResourceMetrics(ResourceMetrics):
 
-    resources = 'RESOURCES'
-    resources_prev = 'RESOURCES_PREV'
+    RESOURCES_KEY = 'RESOURCES'
+    RESOURCES_PREV_KEY = 'RESOURCES_PREV'
 
-    net = 'NETWORK'
-    net_stats = 'net-stats'
-    net_tx = 'bytes-transmitted'
-    net_rx = 'bytes-received'
+    NET_KEY = 'NETWORK'
+    NET_STATS_KEY = 'net-stats'
+    NET_TX_KEY = 'bytes-transmitted'
+    NET_RX_KEY = 'bytes-received'
+    DEFAULT_GW_KEY = 'default-gw'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -79,57 +80,60 @@ class NuvlaEdgeResourceMetrics(ResourceMetrics):
                 return 100 * disk['used'] / disk['capacity']
 
     def load_pct_curr(self) -> float:
-        return self._load_pct(self.resources)
+        return self._load_pct(self.RESOURCES_KEY)
 
     def load_pct_prev(self) -> float:
-        return self._load_pct(self.resources_prev)
+        return self._load_pct(self.RESOURCES_PREV_KEY)
 
     def ram_pct_curr(self) -> float:
-        return self._ram_pct(self.resources)
+        return self._ram_pct(self.RESOURCES_KEY)
 
     def ram_pct_prev(self) -> float:
-        return self._ram_pct(self.resources_prev)
+        return self._ram_pct(self.RESOURCES_PREV_KEY)
 
     def disk_pct_curr(self, disk_name) -> Union[None, float]:
-        return self._disk_pct(self.resources, disk_name)
+        return self._disk_pct(self.RESOURCES_KEY, disk_name)
 
     def disk_pct_prev(self, disk_name) -> Union[None, float]:
-        return self._disk_pct(self.resources_prev, disk_name)
+        return self._disk_pct(self.RESOURCES_PREV_KEY, disk_name)
 
-    def default_gw_name(self) -> str:
-        return self.get(self.net, {}).get('default_gw')
+    def default_gw_name(self) -> Union[None, str]:
+        net = self.get(self.NET_KEY, {})
+        if net:
+            return net.get(self.DEFAULT_GW_KEY)
+        return None
 
-    def default_gw(self) -> dict:
-        gw = self.default_gw_name()
-        if gw:
-            for v in self[self.resources].get(self.net_stats, []):
-                if gw == v.get('interface'):
+    def default_gw_data(self) -> dict:
+        gw_name = self.default_gw_name()
+        if gw_name:
+            for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
+                if gw_name == v.get('interface'):
                     return v
         return {}
 
     def _default_gw_txrx(self, kind) -> dict:
-        gw = self.default_gw()
+        gw = self.default_gw_data()
         if gw:
             return {'interface': gw['interface'],
                     'value': gw[kind]}
         return {}
 
     def default_gw_tx(self) -> dict:
-        return self._default_gw_txrx(self.net_tx)
+        return self._default_gw_txrx(self.NET_TX_KEY)
 
     def default_gw_rx(self) -> dict:
-        return self._default_gw_txrx(self.net_rx)
+        return self._default_gw_txrx(self.NET_RX_KEY)
 
     def net_rx_all(self) -> list:
         res = []
-        for v in self[self.resources].get(self.net_stats, []):
+        for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
             res.append({'interface': v.get('interface'),
-                        'value': v.get(self.net_rx)})
+                        'value': v.get(self.NET_RX_KEY)})
         return res
 
     def net_tx_all(self) -> list:
         res = []
-        for v in self[self.resources].get(self.net_stats, []):
+        for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
             res.append({'interface': v.get('interface'),
-                        'value': v.get(self.net_tx)})
+                        'value': v.get(self.NET_TX_KEY)})
         return res

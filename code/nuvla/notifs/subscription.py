@@ -11,7 +11,6 @@ from nuvla.notifs.updater import DictUpdater
 
 log = get_logger('main')
 
-# SUBS_TOPIC = 'subscription'
 SUBS_CONF_TOPIC = 'subscription-config'
 
 

@@ -150,12 +150,12 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
             except KeyError:
                 return None
             if val and val >= sc.criteria_value() and \
-                    not self._net_db.get_above_thld(m['id'], dev_name, kind):
-                self._net_db.set_above_thld(m['id'], dev_name, kind)
+                    not self._net_db.get_above_thld(m['id'], dev_name, kind, sc['id']):
+                self._net_db.set_above_thld(m['id'], dev_name, kind, sc['id'])
                 return {'interface': dev_name, 'value': val}
             if val and val <= sc.criteria_value() and \
-                    self._net_db.get_above_thld(m['id'], dev_name, kind):
-                self._net_db.reset_above_thld(m['id'], dev_name, kind)
+                    self._net_db.get_above_thld(m['id'], dev_name, kind, sc['id']):
+                self._net_db.reset_above_thld(m['id'], dev_name, kind, sc['id'])
 
         return None
 
@@ -230,37 +230,37 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
             log.debug('Matching subscription %s on %s', sc.get("id"), self.metrics_id())
             # network Rx
             res_m = self.network_rx_above_thld(sc)
-            print(f'1 network_rx_above_thld... {res_m}')
+            log.debug('network_rx_above_thld... %s', res_m)
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_net_rx(sc, res_m))
             # network Tx
             res_m = self.network_tx_above_thld(sc)
-            print(f'2 network_tx_above_thld... {res_m}')
+            log.debug('network_tx_above_thld... %s', res_m)
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_net_tx(sc, res_m))
             # CPU load
             res_m = self.match_load(sc)
-            print(f'3 match_load... {res_m}')
+            log.debug('match_load... %s', res_m)
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_load(sc, res_m))
             # RAM
             res_m = self.match_ram(sc)
-            print(f'4 match_ram... {res_m}')
+            log.debug('match_ram... %s', res_m)
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_ram(sc, res_m))
             # Disk
             res_m = self.match_disk(sc)
-            print(f'5 match_disk... {res_m}')
+            log.debug('match_disk... %s', res_m)
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_disk(sc, res_m))
             # Online
             res_m = self.match_online(sc)
-            print(f'6 match_online... {res_m}')
+            log.debug('match_online... %s', res_m)
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_online(sc, res_m))

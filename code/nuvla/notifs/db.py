@@ -76,7 +76,7 @@ class RxTx:
     def __init__(self, window: Union[None, Window] = None):
         self.total: int = 0
         self.prev: int = 0
-        self._above_thld = False
+        self._above_thld = {}
         self.window = window
 
     def set_window(self, window: Window):
@@ -97,20 +97,23 @@ class RxTx:
 
         self._apply_window()
 
-    def get_above_thld(self) -> bool:
-        return self._above_thld
+    def get_above_thld(self, subs_id) -> bool:
+        return self._above_thld.get(subs_id, False)
 
-    def set_above_thld(self):
-        self._above_thld = True
+    def set_above_thld(self, subs_id):
+        self._above_thld[subs_id] = True
 
-    def reset_above_thld(self):
-        self._above_thld = False
+    def reset_above_thld(self, subs_id):
+        self._above_thld[subs_id] = False
+
+    def reset_above_thld_all(self):
+        self._above_thld = {}
 
     def reset(self):
         """Resting 'total' only. 'prev' is needed to compute next delta.
         """
         self.total = 0
-        self.reset_above_thld()
+        self.reset_above_thld_all()
 
     def _apply_window(self):
         if self.window and self.window.need_update():
@@ -118,108 +121,160 @@ class RxTx:
             self.window.update()
 
     def __repr__(self):
-        return f'{self.__class__.__name__}[total={self.total}, prev={self.prev}]'
+        return f'{self.__class__.__name__}[total={self.total}, ' \
+               f'prev={self.prev}, above_thld={self._above_thld}, ' \
+               f'window={self.window}]'
+
+
+class RxTxDBInMem:
+    def __init__(self):
+        """
+        {'nuvlabox/01': {
+            'eth0': {'rx': RxTx[total, prev, _above_thld{'subs/xxx': True/False, ...}, window],
+                     'tx': RxTx},
+            'docker0': {'rx': RxTx,
+                        'tx': RxTx}
+            ...
+            },
+         'nuvlabox/02': {
+            'eth0': {'rx': RxTx,
+                     'tx': RxTx},
+            'docker0': {'rx': RxTx,
+                        'tx': RxTx}},
+         ...
+        }
+        """
+        self._db = {}
+
+    #
+    # Driver level method.
+
+    def set(self, ne_id, kind, interface=None, value=None):
+        if ne_id in self._db:
+            if interface in self._db[ne_id]:
+                if kind in self._db[ne_id][interface]:
+                    self._db[ne_id][interface][kind].set(value)
+                else:
+                    val = RxTx()
+                    val.set(value)
+                    self._db[ne_id][interface][kind] = val
+            else:
+                val = RxTx()
+                val.set(value)
+                self._db[ne_id][interface] = {kind: val}
+        else:
+            val = RxTx()
+            val.set(value)
+            self._db[ne_id] = {interface: {kind: val}}
+
+    def reset(self, ne_id, iface, kind):
+        if self._db:
+            self._db[ne_id][iface][kind].reset()
+
+    def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
+        if self._db:
+            return self._db[ne_id][iface][kind]
+        return None
+
+    def __len__(self):
+        return len(self._db)
 
 
 class RxTxDB:
     def __init__(self):
-        self.db = {}
+        self._db = RxTxDBInMem()
 
-    def set(self, neid, kind, interface=None, value=None):
-        if neid in self.db:
-            if interface in self.db[neid]:
-                if kind in self.db[neid][interface]:
-                    self.db[neid][interface][kind].set(value)
-                else:
-                    val = RxTx()
-                    val.set(value)
-                    self.db[neid][interface][kind] = val
-            else:
-                val = RxTx()
-                val.set(value)
-                self.db[neid][interface] = {kind: val}
-        else:
-            val = RxTx()
-            val.set(value)
-            self.db[neid] = {interface: {kind: val}}
+    #
+    # Driver level method.
 
-    def set_rx(self, neid: str, data: dict):
+    def set(self, ne_id, kind, interface=None, value=None):
+        if self._db is not None:
+            self._db.set(ne_id, kind, interface, value)
+
+    def reset(self, ne_id, iface, kind):
+        if self._db is not None:
+            self._db.reset(ne_id, iface, kind)
+
+    def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
+        if self._db is not None:
+            return self._db.get_data(ne_id, iface, kind)
+        return None
+
+    #
+    # Common methods.
+
+    def set_rx(self, ne_id: str, data: dict):
         """
-        :param neid: unique ID of the NE
+        :param ne_id: unique ID of the NE
         :param data: {interface: eth0, value: 0}
         """
         if data:
-            self.set(neid, 'rx', **data)
+            self.set(ne_id, 'rx', **data)
 
-    def set_tx(self, neid: str, data: dict):
+    def set_tx(self, ne_id: str, data: dict):
         """
-        :param neid: unique ID of the NE
+        :param ne_id: unique ID of the NE
         :param data: {interface: eth0, value: 0}
         """
         if data:
-            self.set(neid, 'tx', **data)
+            self.set(ne_id, 'tx', **data)
 
-    def get_data(self, neid, iface, kind) -> Union[None, RxTx]:
-        if self.db:
-            return self.db[neid][iface][kind]
-
-    def get(self, neid, iface, kind) -> Union[None, int]:
-        data = self.get_data(neid, iface, kind)
+    def get(self, ne_id, iface, kind) -> Union[None, int]:
+        data = self.get_data(ne_id, iface, kind)
         if data:
             return data.total
 
-    def get_rx_data(self, neid, iface) -> Union[None, RxTx]:
-        return self.get_data(neid, iface, 'rx')
+    def get_rx_data(self, ne_id, iface) -> Union[None, RxTx]:
+        return self.get_data(ne_id, iface, 'rx')
 
-    def get_rx(self, neid, iface) -> Union[None, int]:
-        rx_data = self.get_rx_data(neid, iface)
+    def get_rx(self, ne_id, iface) -> Union[None, int]:
+        rx_data = self.get_rx_data(ne_id, iface)
         if rx_data:
             return rx_data.total
 
-    def get_tx_data(self, neid, iface) -> Union[None, RxTx]:
-        return self.get_data(neid, iface, 'tx')
+    def get_tx_data(self, ne_id, iface) -> Union[None, RxTx]:
+        return self.get_data(ne_id, iface, 'tx')
 
-    def get_tx(self, neid, iface) -> Union[None, int]:
-        tx_data = self.get_tx_data(neid, iface)
+    def get_tx(self, ne_id, iface) -> Union[None, int]:
+        tx_data = self.get_tx_data(ne_id, iface)
         if tx_data:
             return tx_data.total
 
-    def get_tx_gb(self, neid, iface) -> Union[None, float]:
-        tx = self.get_tx(neid, iface)
+    def get_tx_gb(self, ne_id, iface) -> Union[None, float]:
+        tx = self.get_tx(ne_id, iface)
         if tx:
             return bytes_to_gb(tx)
 
-    def get_rx_gb(self, neid, iface) -> Union[None, float]:
-        rx = self.get_rx(neid, iface)
+    def get_rx_gb(self, ne_id, iface) -> Union[None, float]:
+        rx = self.get_rx(ne_id, iface)
         if rx:
             return bytes_to_gb(rx)
 
-    def reset(self, neid, iface, kind):
-        if self.db:
-            self.db[neid][iface][kind].reset()
+    def set_above_thld(self, ne_id, iface, kind, subs_id):
+        data = self.get_data(ne_id, iface, kind)
+        if data:
+            data.set_above_thld(subs_id)
 
-    def set_above_thld(self, neid, iface, kind):
-        if self.db:
-            self.db[neid][iface][kind].set_above_thld()
+    def get_above_thld(self, ne_id, iface, kind, subs_id) -> bool:
+        data = self.get_data(ne_id, iface, kind)
+        if data:
+            return data.get_above_thld(subs_id)
 
-    def get_above_thld(self, neid, iface, kind) -> bool:
-        if self.db:
-            return self.db[neid][iface][kind].get_above_thld()
-
-    def reset_above_thld(self, neid, iface, kind):
-        if self.db:
-            self.db[neid][iface][kind].reset_above_thld()
+    def reset_above_thld(self, ne_id, iface, kind, subs_id):
+        data = self.get_data(ne_id, iface, kind)
+        if data:
+            data.reset_above_thld(subs_id)
 
     def update(self, metrics: NuvlaEdgeResourceMetrics):
-        neid = metrics.get('id')
-        if neid:
+        ne_id = metrics.get('id')
+        if ne_id:
             for v in metrics.net_rx_all():
-                self.set_rx(neid, v)
+                self.set_rx(ne_id, v)
             for v in metrics.net_tx_all():
-                self.set_tx(neid, v)
+                self.set_tx(ne_id, v)
 
     def __len__(self):
-        return len(self.db)
+        return len(self._db)
 
     def __repr__(self):
-        return str(self.db)
+        return str(self._db)
