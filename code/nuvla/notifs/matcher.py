@@ -143,7 +143,7 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
             if not dev_name:
                 return None
             try:
-                if self._net_db and len(self._net_db) > 0:
+                if self._net_db is not None:
                     val = getattr(self._net_db, f'get_{kind}_gb')(m['id'], dev_name)
                 else:
                     return None

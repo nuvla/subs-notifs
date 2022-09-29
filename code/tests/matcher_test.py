@@ -1,6 +1,8 @@
+import os
 import unittest
 
-from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes
+from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes, \
+    RxTxDriverSqlite, RxTxDBInMem
 from nuvla.notifs.matcher import SubscriptionConfigMatcher, \
     NuvlaEdgeSubsConfMatcher
 from nuvla.notifs.metric import ResourceMetrics, NuvlaEdgeResourceMetrics
@@ -257,6 +259,79 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                 'DISKS': [{'used': 9, 'capacity': 10, 'device': 'A:'}]}}))
         assert True is nem._disk_moved_below_thld(sc)
 
+    def test_match_went_onoffline(self):
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
+        assert False is nem._went_online()
+        assert False is nem._went_offline()
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': True}))
+        assert False is nem._went_online()
+        assert False is nem._went_offline()
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': False}))
+        assert False is nem._went_online()
+        assert False is nem._went_offline()
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': False}))
+        assert True is nem._went_online()
+        assert False is nem._went_offline()
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': True}))
+        assert False is nem._went_online()
+        assert True is nem._went_offline()
+
+    def test_match_online(self):
+        sc = SubscriptionConfig(
+            {'criteria': {
+                'metric': 'foo',
+                'kind': 'boolean',
+                'condition': 'bar',
+                'value': 'true'
+            }})
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
+        assert None is nem.match_online(sc)
+
+        sc = SubscriptionConfig(
+            {'criteria': {
+                'metric': 'state',
+                'kind': 'boolean',
+                'condition': 'no',
+                'value': 'true'
+            }})
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': True}))
+        assert None is nem.match_online(sc)
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': False}))
+        assert None is nem.match_online(sc)
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': False,
+             'ONLINE_PREV': True}))
+        assert nem.MATCHED is nem.match_online(sc)
+
+        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': False}))
+        assert nem.MATCHED_RECOVERY is nem.match_online(sc)
+
+
+class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
+
+    driver = None
+
+    def setUp(self) -> None:
+        self.driver = RxTxDBInMem()
+
     def test_match_net_rxtx_no_db(self):
         sc = SubscriptionConfig({
             'criteria': {
@@ -266,7 +341,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                 'kind': 'numeric'
             }})
         nerm = NuvlaEdgeResourceMetrics({})
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
@@ -284,7 +359,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
@@ -303,7 +378,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
@@ -332,7 +407,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
@@ -352,11 +427,10 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                                }]},
             "RESOURCES_PREV": {
                 "CPU": {"load": 3.0, "capacity": 4, "topic": "cpu"}}})
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         rxtx_db.update(nerm)
         nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
         r_rx = nem.network_rx_above_thld(sc)
-        print(r_rx)
         assert {'interface': 'eth0', 'value': 7.0} == r_rx
         r_tx = nem.network_tx_above_thld(sc)
         assert None is r_tx
@@ -369,7 +443,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                 'value': '5',
                 'kind': 'numeric'
             }})
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         rxtx_db.update(nerm)
         r_rx = nem.network_rx_above_thld(sc)
         assert None is r_rx
@@ -377,7 +451,8 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert {'interface': 'eth0', 'value': 6.0} == r_tx
 
     def test_match_net_rxtx_with_db(self):
-        rxtx_db = RxTxDB()
+        print(self.driver)
+        rxtx_db = RxTxDB(self.driver)
 
         sc = SubscriptionConfig({
             'criteria': {
@@ -521,7 +596,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
             'resource-kind': 'nuvlabox',
             'resource-type': 'subscription-config'})
 
-        rxtx_db = RxTxDB()
+        rxtx_db = RxTxDB(self.driver)
         nerm = NuvlaEdgeResourceMetrics({
             'id': 'nuvlabox/01',
             'NAME': 'NuvlaEdge Test',
@@ -565,8 +640,6 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
         assert False is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
 
-        print(rxtx_db)
-
         nerm['RESOURCES'] = {
             'net-stats': [
                 {'interface': 'eth0',
@@ -592,71 +665,6 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/01')
         assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/02')
         assert True is rxtx_db.get_above_thld('nuvlabox/01', 'eth0', 'rx', 'subscription-config/03')
-
-    def test_match_went_onoffline(self):
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
-        assert False is nem._went_online()
-        assert False is nem._went_offline()
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': True,
-             'ONLINE_PREV': True}))
-        assert False is nem._went_online()
-        assert False is nem._went_offline()
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': False,
-             'ONLINE_PREV': False}))
-        assert False is nem._went_online()
-        assert False is nem._went_offline()
-
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': True,
-             'ONLINE_PREV': False}))
-        assert True is nem._went_online()
-        assert False is nem._went_offline()
-
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': False,
-             'ONLINE_PREV': True}))
-        assert False is nem._went_online()
-        assert True is nem._went_offline()
-
-    def test_match_online(self):
-        sc = SubscriptionConfig(
-            {'criteria': {
-                'metric': 'foo',
-                'kind': 'boolean',
-                'condition': 'bar',
-                'value': 'true'
-            }})
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics({}))
-        assert None is nem.match_online(sc)
-
-        sc = SubscriptionConfig(
-            {'criteria': {
-                'metric': 'state',
-                'kind': 'boolean',
-                'condition': 'no',
-                'value': 'true'
-            }})
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': True,
-             'ONLINE_PREV': True}))
-        assert None is nem.match_online(sc)
-
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': False,
-             'ONLINE_PREV': False}))
-        assert None is nem.match_online(sc)
-
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': False,
-             'ONLINE_PREV': True}))
-        assert nem.MATCHED is nem.match_online(sc)
-
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeResourceMetrics(
-            {'ONLINE': True,
-             'ONLINE_PREV': False}))
-        assert nem.MATCHED_RECOVERY is nem.match_online(sc)
 
     def test_match_all_none(self):
         sc = SubscriptionConfig({
@@ -805,12 +813,10 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        net_db = RxTxDB()
+        net_db = RxTxDB(self.driver)
         net_db.update(nerm)
         nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
         res = nescm.match_all([sc_disk, sc_load, sc_ram, sc_rx_wlan1, sc_tx_gw])
-        import pprint
-        pprint.pp(res)
         ids_res = list(map(lambda x: x['id'], res))
         ids = set(f'subscription-config/0{i}' for i in range(1, 6))
         assert set() == ids.difference(ids_res)
@@ -859,7 +865,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        net_db = RxTxDB()
+        net_db = RxTxDB(self.driver)
         net_db.update(nerm)
         nescm = NuvlaEdgeSubsConfMatcher(nerm, net_db)
 
@@ -914,3 +920,17 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert res[0]['subs_description'] == 'NE network Rx'
         assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
         assert True is net_db.get_above_thld(*resource, 'subscription-config/01')
+
+
+class TestNuvlaEdgeSubsConfMatcherDBSqlite(TestNuvlaEdgeSubsConfMatcherDBInMem):
+
+    DB_FILENAME = 'test.db'
+
+    def setUp(self) -> None:
+        self.driver = RxTxDriverSqlite(self.DB_FILENAME)
+        self.driver.connect()
+
+    def tearDown(self) -> None:
+        self.driver.close()
+        os.unlink(self.DB_FILENAME)
+        assert not os.path.exists(self.DB_FILENAME)

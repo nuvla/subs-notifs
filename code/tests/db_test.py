@@ -1,11 +1,14 @@
+import os
 import unittest
 
 from datetime import datetime, timedelta
 from mock import Mock
 
 import nuvla.notifs.db as db
-from nuvla.notifs.db import RxTx, RxTxDB, Window, bytes_to_gb, gb_to_bytes, \
-    next_month_first_day
+from nuvla.notifs.db import RxTx, RxTxDB, RxTxDriverSqlite, Window, \
+    bytes_to_gb, gb_to_bytes, next_month_first_day
+
+db_now_orig = db.now
 
 
 class TestDBUtils(unittest.TestCase):
@@ -62,47 +65,120 @@ class TestRxTx(unittest.TestCase):
         assert 3 == rx.total
 
 
-class TestNetworkDB(unittest.TestCase):
+def rx_workflow_test(rxtx):
+    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 0})
+    assert 0 == rxtx.get_rx('foo', 'eth0')
+    assert 0 == rxtx.get_rx_data('foo', 'eth0').prev
+
+    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 1})
+    assert 1 == rxtx.get_rx('foo', 'eth0')
+    assert 1 == rxtx.get_rx_data('foo', 'eth0').prev
+
+    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 3})
+    assert 3 == rxtx.get_rx('foo', 'eth0')
+    assert 3 == rxtx.get_rx_data('foo', 'eth0').prev
+
+    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 0})
+    assert 3 == rxtx.get_rx('foo', 'eth0')
+    assert 0 == rxtx.get_rx_data('foo', 'eth0').prev
+
+    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 2})
+    assert 5 == rxtx.get_rx('foo', 'eth0')
+    assert 2 == rxtx.get_rx_data('foo', 'eth0').prev
+
+    rxtx.set_tx('foo', {'interface': 'eth0', 'value': 2})
+    assert 2 == rxtx.get_tx('foo', 'eth0')
+    assert 2 == rxtx.get_tx_data('foo', 'eth0').prev
+
+    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 5})
+    assert 8 == rxtx.get_rx('foo', 'eth0')
+    assert 5 == rxtx.get_rx_data('foo', 'eth0').prev
+
+    rxtx.set_tx('foo', {'interface': 'eth0', 'value': 5})
+    assert 5 == rxtx.get_tx('foo', 'eth0')
+    assert 5 == rxtx.get_tx_data('foo', 'eth0').prev
+
+
+class TestNetworkDBInMem(unittest.TestCase):
 
     def test_init(self):
         ndb = RxTxDB()
         assert ndb._db is not None
 
-    def test_set_get(self):
+    def test_rx_workflow(self):
         ndb = RxTxDB()
         assert ndb._db is not None
 
-        ndb.set_rx('foo', {'interface': 'eth0', 'value': 0})
-        assert 0 == ndb.get_rx('foo', 'eth0')
-        assert 0 == ndb.get_rx_data('foo', 'eth0').prev
+        rx_workflow_test(ndb)
 
-        ndb.set_rx('foo', {'interface': 'eth0', 'value': 1})
-        assert 1 == ndb.get_rx('foo', 'eth0')
-        assert 1 == ndb.get_rx_data('foo', 'eth0').prev
+class TestRxTxDriverSqlightInit(unittest.TestCase):
 
-        ndb.set_rx('foo', {'interface': 'eth0', 'value': 3})
-        assert 3 == ndb.get_rx('foo', 'eth0')
-        assert 3 == ndb.get_rx_data('foo', 'eth0').prev
+    DB_FILENAME = 'test.db'
 
-        ndb.set_rx('foo', {'interface': 'eth0', 'value': 0})
-        assert 3 == ndb.get_rx('foo', 'eth0')
-        assert 0 == ndb.get_rx_data('foo', 'eth0').prev
+    def test_init(self):
+        driver = RxTxDriverSqlite(self.DB_FILENAME)
+        assert driver.con is not None
+        assert driver.cur is None
+        assert os.path.exists(self.DB_FILENAME)
+        driver.connect()
+        assert driver.con is not None
+        assert driver.cur is not None
+        assert os.path.exists(self.DB_FILENAME)
+        driver.close()
+        assert driver.con is not None
+        assert driver.cur is None
+        assert os.path.exists(self.DB_FILENAME)
+        os.unlink(self.DB_FILENAME)
+        assert not os.path.exists(self.DB_FILENAME)
 
-        ndb.set_rx('foo', {'interface': 'eth0', 'value': 2})
-        assert 5 == ndb.get_rx('foo', 'eth0')
-        assert 2 == ndb.get_rx_data('foo', 'eth0').prev
 
-        ndb.set_tx('foo', {'interface': 'eth0', 'value': 2})
-        assert 2 == ndb.get_tx('foo', 'eth0')
-        assert 2 == ndb.get_tx_data('foo', 'eth0').prev
+class TestRxTxDriverSqlight(unittest.TestCase):
 
-        ndb.set_rx('foo', {'interface': 'eth0', 'value': 5})
-        assert 8 == ndb.get_rx('foo', 'eth0')
-        assert 5 == ndb.get_rx_data('foo', 'eth0').prev
+    DB_FILENAME = 'test.db'
 
-        ndb.set_tx('foo', {'interface': 'eth0', 'value': 5})
-        assert 5 == ndb.get_tx('foo', 'eth0')
-        assert 5 == ndb.get_tx_data('foo', 'eth0').prev
+    def setUp(self) -> None:
+        self.driver = RxTxDriverSqlite(self.DB_FILENAME)
+        self.driver.connect()
+
+    def tearDown(self) -> None:
+        self.driver.close()
+        os.unlink(self.DB_FILENAME)
+        assert not os.path.exists(self.DB_FILENAME)
+
+    def test_driver_set_get(self):
+        self.driver.set('nuvlaedge/01', 'rx', 'eth0', 1)
+        rx = self.driver.get_data('nuvlaedge/01', 'eth0', 'rx')
+        assert 1 == rx.total
+        assert 1 == rx.prev
+        assert {} == rx._above_thld
+        assert None is rx.window
+
+        self.driver.set('nuvlaedge/02', 'rx', 'eth0', 2)
+        rx = self.driver.get_data('nuvlaedge/02', 'eth0', 'rx')
+        assert 2 == rx.total
+        assert 2 == rx.prev
+        assert {} == rx._above_thld
+        assert None is rx.window
+
+        self.driver.reset('nuvlaedge/01', 'eth0', 'rx')
+        rx = self.driver.get_data('nuvlaedge/01', 'eth0', 'rx')
+        assert 0 == rx.total
+        assert 1 == rx.prev
+        assert {} == rx._above_thld
+        assert None is rx.window
+
+        self.driver.reset('nuvlaedge/02', 'eth0', 'rx')
+        rx = self.driver.get_data('nuvlaedge/02', 'eth0', 'rx')
+        assert 0 == rx.total
+        assert 2 == rx.prev
+        assert {} == rx._above_thld
+        assert None is rx.window
+
+    def test_rx_workflow(self):
+        rxtx_db = RxTxDB(self.driver)
+        assert rxtx_db._db is not None
+
+        rx_workflow_test(rxtx_db)
 
 
 class TestWindow(unittest.TestCase):
@@ -145,7 +221,7 @@ class TestRxTxWithWindow(unittest.TestCase):
         assert 1 == rx.total
         assert 1 == rx.prev
 
-    def test_reset(self):
+    def test_reset_window_1d(self):
         rx = RxTx()
         rx.set_window(Window('1d'))
         assert '1d' == rx.window.ts_window
@@ -166,6 +242,9 @@ class TestRxTxWithWindow(unittest.TestCase):
         tomorrow = (datetime.now() + timedelta(days=1)).date()
         assert tomorrow == rx.window.ts_reset.date()
 
+        db.now = db_now_orig
+
+    def test_reset_window_month(self):
         rx = RxTx()
         rx.set_window(Window())
         assert 'month' == rx.window.ts_window

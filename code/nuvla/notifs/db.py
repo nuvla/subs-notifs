@@ -1,9 +1,15 @@
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Union
 import math
+import pickle
 import re
+import sqlite3
 
 from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
+from nuvla.notifs.log import get_logger
+
+log = get_logger('db')
 
 
 def bytes_to_gb(value_bytes: int) -> float:
@@ -25,7 +31,6 @@ def next_month_first_day() -> datetime:
 
 
 class Window:
-
     RE_VALID_TIME_WINDOW = re.compile('[0-9].*d$')
 
     def __init__(self, ts_window='month'):
@@ -117,6 +122,7 @@ class RxTx:
 
     def _apply_window(self):
         if self.window and self.window.need_update():
+            print(f'{self.window} and {self.window.need_update()}')
             self.reset()
             self.window.update()
 
@@ -124,6 +130,117 @@ class RxTx:
         return f'{self.__class__.__name__}[total={self.total}, ' \
                f'prev={self.prev}, above_thld={self._above_thld}, ' \
                f'window={self.window}]'
+
+
+# TODO: there is a problem with the abstract methods and their signatures
+#       when the class is used. So, the class is not used for the moment.
+class RxTxDriverABC(ABC):
+
+    @abstractmethod
+    def set(self, ne_id, kind, interface=None, value=None):
+        """
+        TODO: document.
+        :param ne_id:
+        :param kind:
+        :param interface:
+        :param value:
+        :return:
+        """
+
+    @abstractmethod
+    def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
+        """
+        TODO: document.
+        :param ne_id:
+        :param iface:
+        :param kind:
+        :return:
+        """
+
+    @abstractmethod
+    def reset(self, ne_id, iface, kind):
+        """
+        TODO: document.
+        :param ne_id:
+        :param iface:
+        :param kind:
+        :return:
+        """
+
+
+class RxTxDriverSqlite:
+
+    TABLE_NAME = 'rxtx'
+
+    def __init__(self, path: str):
+        self.con = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES)
+        self.cur = None
+
+    def set(self, ne_id, kind, interface=None, value=None):
+        rxtx = self.get_data(ne_id, interface, kind)
+        if rxtx:
+            rxtx.set(value)
+            rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
+            self.cur.execute(f"UPDATE {self.TABLE_NAME} SET rxtx=? WHERE ne_id=? AND iface=? AND kind=?",
+                             (rxtx_blob, ne_id, interface, kind))
+            self.con.commit()
+        else:
+            # Initial data.
+            rxtx = RxTx()
+            rxtx.set(value)
+            rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
+            self.cur.execute(f"INSERT INTO {self.TABLE_NAME} VALUES (?, ?, ?, ?)",
+                             (ne_id, interface, kind, rxtx_blob))
+            self.con.commit()
+
+    def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
+        select = f"SELECT rxtx FROM {self.TABLE_NAME} WHERE ne_id='{ne_id}' AND iface='{iface}' AND kind='{kind}'"
+        res = self.cur.execute(select)
+        rxtx_res = res.fetchone()
+        if rxtx_res:
+            rxtx_blob = rxtx_res[0]
+            return pickle.loads(rxtx_blob)
+        return None
+
+    def reset(self, ne_id, iface, kind):
+        rxtx = self.get_data(ne_id, iface, kind)
+        if rxtx:
+            rxtx.reset()
+            self._update_rxtx(ne_id, iface, kind, rxtx)
+
+    def set_above_thld(self, ne_id, iface, kind, subs_id):
+        rxtx = self.get_data(ne_id, iface, kind)
+        if rxtx:
+            rxtx.set_above_thld(subs_id)
+            self._update_rxtx(ne_id, iface, kind, rxtx)
+
+    def reset_above_thld(self, ne_id, iface, kind, subs_id):
+        rxtx = self.get_data(ne_id, iface, kind)
+        if rxtx:
+            rxtx.reset_above_thld(subs_id)
+            self._update_rxtx(ne_id, iface, kind, rxtx)
+
+    def _update_rxtx(self, ne_id, iface, kind, rxtx: RxTx):
+        rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
+        self.cur.execute(f"UPDATE {self.TABLE_NAME} SET rxtx=? WHERE ne_id=? AND iface=? AND kind=?",
+                         (rxtx_blob, ne_id, iface, kind))
+        self.con.commit()
+
+    def close(self):
+        self.cur.close()
+        self.cur = None
+
+    def connect(self):
+        self.cur = self.con.cursor()
+        self._create_table()
+
+    def _create_table(self):
+        self.cur.execute(f'''CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
+        ne_id TEXT NOT NULL,
+        iface TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        rxtx BLOB NOT NULL
+        )''')
 
 
 class RxTxDBInMem:
@@ -168,21 +285,32 @@ class RxTxDBInMem:
             self._db[ne_id] = {interface: {kind: val}}
 
     def reset(self, ne_id, iface, kind):
-        if self._db:
+        if self._db and len(self._db) > 0:
             self._db[ne_id][iface][kind].reset()
 
     def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
-        if self._db:
+        if self._db and len(self._db) > 0:
             return self._db[ne_id][iface][kind]
         return None
+
+    def set_above_thld(self, ne_id, iface, kind, subs_id):
+        if self._db and len(self._db) > 0:
+            self._db[ne_id][iface][kind].set_above_thld(subs_id)
+
+    def reset_above_thld(self, ne_id, iface, kind, subs_id):
+        if self._db and len(self._db) > 0:
+            self._db[ne_id][iface][kind].reset_above_thld(subs_id)
 
     def __len__(self):
         return len(self._db)
 
 
 class RxTxDB:
-    def __init__(self):
-        self._db = RxTxDBInMem()
+    def __init__(self, driver=None):
+        if driver is None:
+            self._db = RxTxDBInMem()
+        else:
+            self._db = driver
 
     #
     # Driver level method.
@@ -251,9 +379,7 @@ class RxTxDB:
             return bytes_to_gb(rx)
 
     def set_above_thld(self, ne_id, iface, kind, subs_id):
-        data = self.get_data(ne_id, iface, kind)
-        if data:
-            data.set_above_thld(subs_id)
+        self._db.set_above_thld(ne_id, iface, kind, subs_id)
 
     def get_above_thld(self, ne_id, iface, kind, subs_id) -> bool:
         data = self.get_data(ne_id, iface, kind)
@@ -261,9 +387,7 @@ class RxTxDB:
             return data.get_above_thld(subs_id)
 
     def reset_above_thld(self, ne_id, iface, kind, subs_id):
-        data = self.get_data(ne_id, iface, kind)
-        if data:
-            data.reset_above_thld(subs_id)
+        self._db.reset_above_thld(ne_id, iface, kind, subs_id)
 
     def update(self, metrics: NuvlaEdgeResourceMetrics):
         ne_id = metrics.get('id')
