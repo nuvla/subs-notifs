@@ -20,7 +20,7 @@ DOCKER_ORG=${DOCKER_ORG:-nuvladev}
 
 MANIFEST=${DOCKER_ORG}/${DOCKER_IMAGE}:${GIT_BRANCH}
 
-platforms=(amd64 arm64 arm)
+platforms=(amd64 arm64)
 
 
 #

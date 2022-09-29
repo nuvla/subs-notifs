@@ -17,22 +17,30 @@ class NotificationPublisher:
         self.producer = kafka_producer()
 
     def publish(self, key: str, msg: dict, topic: str):
-        self.producer.send(topic,
-                           key=bytes(key, encoding='utf8'),
-                           value=bytes(json.dumps(msg), encoding='utf8'))
+        future = self.producer.send(topic,
+                                    key=bytes(key, encoding='utf8'),
+                                    value=bytes(json.dumps(msg),
+                                                encoding='utf8'))
+        if future:
+            log.debug('Kafka publish future value: %s', future.get(5))
+            if future.succeeded():
+                log.debug('Kafka publish future succeeded: %s', future)
+            else:
+                log.debug('Kafka publish future failed: %s', future)
 
     def publish_list(self, msgs: List[Dict], topic: str):
         for msg in msgs:
+            log.debug('Publishing to %s: %s', topic, msg)
             self.publish(msg['id'], msg, topic)
 
 
-class NuvlaEdgeNotificationBuilder(dict):
+class NuvlaEdgeNotification(dict):
     def __init__(self, sc: SubscriptionConfig, metrics: ResourceMetrics):
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
-                          'method-ids': sc['method-ids'],
-                          'description': sc['description'],
+                          'method_ids': sc['method-ids'],
+                          'subs_description': sc['description'],
                           'condition': sc['criteria']['condition'],
                           'condition_value': str(sc['criteria']['value']),
                           'resource_name': metrics.name(),
@@ -41,25 +49,30 @@ class NuvlaEdgeNotificationBuilder(dict):
                           'timestamp': metrics.timestamp(),
                           'recovery': False})
 
+
+class NuvlaEdgeNotificationBuilder:
+    def __init__(self, sc: SubscriptionConfig, metrics: ResourceMetrics):
+        self._n = NuvlaEdgeNotification(sc, metrics)
+
     def name(self, name: str):
-        self['metric'] = name
+        self._n['metric'] = name
         return self
 
     def value(self, value: Union[int, float]):
-        self['value'] = value
+        self._n['value'] = value
         return self
 
     def recovery(self, recovery: bool):
-        self['recovery'] = recovery
+        self._n['recovery'] = recovery
         return self
 
     def condition(self, condition: str):
-        self['condition'] = condition
+        self._n['condition'] = condition
         return self
 
     def condition_value(self, condition: str):
-        self['condition_value'] = condition
+        self._n['condition_value'] = condition
         return self
 
-    def build(self):
-        return self
+    def build(self) -> NuvlaEdgeNotification:
+        return self._n

@@ -35,7 +35,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
              'TAGS': ['arch=x86-64'],
-             'NETWORK': {'default_gw': 'eth0'},
+             'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
              'ONLINE': True,
              'ONLINE_PREV': True,
              'RESOURCES': {'CPU': {'load': 5.52, 'capacity': 4, 'topic': 'cpu'},
@@ -71,8 +71,8 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert {'id': 'subscription-config/11111111-2222-3333-4444-555555555555',
                 'subs_id': 'subscription-config/11111111-2222-3333-4444-555555555555',
                 'subs_name': 'nb Rx',
-                'method-ids': ['notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'],
-                'description': 'nb network cumulative Rx over 30 days',
+                'method_ids': ['notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'],
+                'subs_description': 'nb network cumulative Rx over 30 days',
                 'condition': '>',
                 'condition_value': '5',
                 'resource_name': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
@@ -115,6 +115,8 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         nescm = NuvlaEdgeSubsConfMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED_RECOVERY)
+        assert res['method_ids'] == sc.get('method-ids')
+        assert res['subs_description'] == sc.get('description')
         assert res['metric'] == 'NE online'
         assert res['condition'] == 'true'
         assert res['recovery'] is True
@@ -135,6 +137,8 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         nescm = NuvlaEdgeSubsConfMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED)
+        assert res['method_ids'] == sc.get('method-ids')
+        assert res['subs_description'] == sc.get('description')
         assert res['metric'] == 'NE online'
         assert res['condition'] == 'false'
         assert res['recovery'] is False
