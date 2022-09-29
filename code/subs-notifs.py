@@ -6,7 +6,7 @@ import time
 import threading
 import traceback
 
-from nuvla.notifs.db import RxTxDB
+from nuvla.notifs.db import RxTxDB, RxTxDriverSqlite
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.subscription import SelfUpdatingDict, \
     SubscriptionConfig, SUBS_CONF_TOPIC
@@ -25,7 +25,7 @@ NOTIF_TOPIC = 'NOTIFICATIONS_S'
 RESOURCE_KIND_NE = 'nuvlabox'
 RESOURCE_KIND_EVENT = 'event'
 RESOURCE_KIND_DATARECORD = 'data-record'
-
+DB_FILENAME='/opt/subs-notifs/subs-notifs.db'
 
 def ne_telem_process(msg, sc: SelfUpdatingDict, net_db: RxTxDB,
                      notif_publisher: NotificationPublisher):
@@ -54,7 +54,12 @@ def wait_sc_populated(sc: SelfUpdatingDict, resource_kind: str, sleep=5, timeout
         time.sleep(sleep)
 
 
-def subs_notif_nuvla_edge_telemetry(sc: SelfUpdatingDict, net_db: RxTxDB):
+def subs_notif_nuvla_edge_telemetry(sc: SelfUpdatingDict):
+
+    db_driver = RxTxDriverSqlite(DB_FILENAME)
+    db_driver.connect()
+    net_db = RxTxDB(db_driver)
+
     wait_sc_populated(sc, RESOURCE_KIND_NE, timeout=60)
 
     notif_publisher = NotificationPublisher()
@@ -88,17 +93,11 @@ def main():
 
     signal.signal(signal.SIGUSR1, print_sub_conf)
 
-    def print_net_db(signum, trace):
-        log.info(f'Network DB:\n{pformat(net_db)}')
-
-    signal.signal(signal.SIGUSR2, print_net_db)
-
     sc = SelfUpdatingDict('subscription-config',
                           KafkaUpdater(SUBS_CONF_TOPIC),
                           SubscriptionConfig)
-    net_db = RxTxDB()
 
-    t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry, args=(sc, net_db), daemon=True)
+    t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry, args=(sc,), daemon=True)
     t2 = threading.Thread(target=subs_notif_data_record, args=(sc,), daemon=True)
     t3 = threading.Thread(target=subs_notif_event, args=(sc,), daemon=True)
     t1.start()
