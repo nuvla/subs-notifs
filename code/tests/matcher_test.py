@@ -1,8 +1,8 @@
-import os
 import unittest
 
+from db_test import RxTxDriverSqliteBaseTest
 from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes, \
-    RxTxDriverSqlite, RxTxDBInMem
+    RxTxDriverInMem
 from nuvla.notifs.matcher import SubscriptionConfigMatcher, \
     NuvlaEdgeSubsConfMatcher
 from nuvla.notifs.metric import ResourceMetrics, NuvlaEdgeResourceMetrics
@@ -330,7 +330,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
     driver = None
 
     def setUp(self) -> None:
-        self.driver = RxTxDBInMem()
+        self.driver = RxTxDriverInMem()
 
     def test_match_net_rxtx_no_db(self):
         sc = SubscriptionConfig({
@@ -922,15 +922,6 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         assert True is net_db.get_above_thld(*resource, 'subscription-config/01')
 
 
-class TestNuvlaEdgeSubsConfMatcherDBSqlite(TestNuvlaEdgeSubsConfMatcherDBInMem):
-
-    DB_FILENAME = 'test.db'
-
-    def setUp(self) -> None:
-        self.driver = RxTxDriverSqlite(self.DB_FILENAME)
-        self.driver.connect()
-
-    def tearDown(self) -> None:
-        self.driver.close()
-        os.unlink(self.DB_FILENAME)
-        assert not os.path.exists(self.DB_FILENAME)
+class TestNuvlaEdgeSubsConfMatcherDBSqlite(RxTxDriverSqliteBaseTest,
+                                           TestNuvlaEdgeSubsConfMatcherDBInMem):
+    pass

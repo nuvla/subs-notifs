@@ -25,8 +25,7 @@ def now() -> datetime:
 
 
 def next_month_first_day() -> datetime:
-    now = datetime.now()
-    return (now.replace(day=1) + timedelta(days=32)) \
+    return (now().replace(day=1) + timedelta(days=32)) \
         .replace(day=1, minute=0, second=0, microsecond=0)
 
 
@@ -243,7 +242,7 @@ class RxTxDriverSqlite:
         )''')
 
 
-class RxTxDBInMem:
+class RxTxDriverInMem:
     def __init__(self):
         """
         {'nuvlabox/01': {
@@ -308,7 +307,7 @@ class RxTxDBInMem:
 class RxTxDB:
     def __init__(self, driver=None):
         if driver is None:
-            self._db = RxTxDBInMem()
+            self._db = RxTxDriverInMem()
         else:
             self._db = driver
 

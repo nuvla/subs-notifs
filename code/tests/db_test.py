@@ -111,6 +111,7 @@ class TestNetworkDBInMem(unittest.TestCase):
 
         rx_workflow_test(ndb)
 
+
 class TestRxTxDriverSqlightInit(unittest.TestCase):
 
     DB_FILENAME = 'test.db'
@@ -132,9 +133,9 @@ class TestRxTxDriverSqlightInit(unittest.TestCase):
         assert not os.path.exists(self.DB_FILENAME)
 
 
-class TestRxTxDriverSqlight(unittest.TestCase):
+class RxTxDriverSqliteBaseTest(unittest.TestCase):
 
-    DB_FILENAME = 'test.db'
+    DB_FILENAME = ':memory:'
 
     def setUp(self) -> None:
         self.driver = RxTxDriverSqlite(self.DB_FILENAME)
@@ -142,8 +143,12 @@ class TestRxTxDriverSqlight(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.driver.close()
-        os.unlink(self.DB_FILENAME)
-        assert not os.path.exists(self.DB_FILENAME)
+        if self.DB_FILENAME != ':memory:':
+            os.unlink(self.DB_FILENAME)
+            assert not os.path.exists(self.DB_FILENAME)
+
+
+class TestRxTxDriverSqlight(RxTxDriverSqliteBaseTest):
 
     def test_driver_set_get(self):
         self.driver.set('nuvlaedge/01', 'rx', 'eth0', 1)
