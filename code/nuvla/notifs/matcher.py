@@ -135,9 +135,18 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
         return self._network_rxtx_above_thld(sc, 'tx')
 
     def _network_rxtx_above_thld(self, sc: SubscriptionConfig, kind: str) -> Union[None, Dict]:
+
+        def ge(val, sc: SubscriptionConfig) -> bool:
+            "greater than or equal"
+            return val and val >= sc.criteria_value()
+
+        def le(val, sc: SubscriptionConfig) -> bool:
+            "less than or equal"
+            return val and val <= sc.criteria_value()
+
         if not sc.is_metric_cond(f'network-{kind}', '>'):
             return None
-        m = self.metrics()
+        m: NuvlaEdgeResourceMetrics = self.metrics()
         if m:
             dev_name = sc.criteria_dev_name() or m.default_gw_name()
             if not dev_name:
@@ -149,11 +158,11 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
                     return None
             except KeyError:
                 return None
-            if val and val >= sc.criteria_value() and \
+            if ge(val, sc) and \
                     not self._net_db.get_above_thld(m['id'], dev_name, kind, sc['id']):
                 self._net_db.set_above_thld(m['id'], dev_name, kind, sc['id'])
                 return {'interface': dev_name, 'value': val}
-            if val and val <= sc.criteria_value() and \
+            if le(val, sc) and \
                     self._net_db.get_above_thld(m['id'], dev_name, kind, sc['id']):
                 self._net_db.reset_above_thld(m['id'], dev_name, kind, sc['id'])
 
