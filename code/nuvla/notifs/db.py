@@ -171,6 +171,10 @@ class RxTxDriverSqlite:
 
     TABLE_NAME = 'rxtx'
 
+    INSERT = f"INSERT INTO {TABLE_NAME} VALUES (?, ?, ?, ?)"
+    UPDATE = f"UPDATE {TABLE_NAME} SET rxtx=? WHERE ne_id=? AND iface=? AND kind=?"
+    SELECT = f"SELECT rxtx FROM {TABLE_NAME} WHERE ne_id=? AND iface=? AND kind=?"
+
     def __init__(self, path: str):
         self.con = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES)
         self.cur = None
@@ -180,21 +184,18 @@ class RxTxDriverSqlite:
         if rxtx:
             rxtx.set(value)
             rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
-            self.cur.execute(f"UPDATE {self.TABLE_NAME} SET rxtx=? WHERE ne_id=? AND iface=? AND kind=?",
-                             (rxtx_blob, ne_id, interface, kind))
+            self.cur.execute(self.UPDATE, (rxtx_blob, ne_id, interface, kind))
             self.con.commit()
         else:
             # Initial data.
             rxtx = RxTx()
             rxtx.set(value)
             rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
-            self.cur.execute(f"INSERT INTO {self.TABLE_NAME} VALUES (?, ?, ?, ?)",
-                             (ne_id, interface, kind, rxtx_blob))
+            self.cur.execute(self.INSERT, (ne_id, interface, kind, rxtx_blob))
             self.con.commit()
 
     def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
-        select = f"SELECT rxtx FROM {self.TABLE_NAME} WHERE ne_id='{ne_id}' AND iface='{iface}' AND kind='{kind}'"
-        res = self.cur.execute(select)
+        res = self.cur.execute(self.SELECT, (ne_id, iface, kind))
         rxtx_res = res.fetchone()
         if rxtx_res:
             rxtx_blob = rxtx_res[0]
