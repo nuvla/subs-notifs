@@ -21,6 +21,27 @@ refer to https://github.com/nuvla/deployment for a fully functional deployment
 
 ---
 
+## Running tests
+
+Use the same Python version as defined in Dockerfile. Create a virtual 
+environment with the correct Python veresion and run tests in it.
+
+On the example of `pyenv` and Python `3.8.12`.
+
+```shell
+pyenv virtualenv 3.8.12 nuvla-subs-notifs-py3.8.12
+pyenv activate nuvla-subs-notifs-py3.8.12
+```
+
+Run tests in `code/` folder.
+
+```shell
+cd code/
+export PYTHONPATH=$(pwd):$PYTHONPATH
+pip install -r requirements.tests.txt
+pytest tests/ --junitxml=test-report.xml -v
+```
+
 ## Building 
 
 This repository is already linked with Travis CI, so with every commit, a new
@@ -36,7 +57,7 @@ organization in Docker hub, names as _nuvladev/subs-notifs:\<branch\>_.
 
 ## Deployment
 
-The servicice will only work if deployed along with other Nuvla services.
+The service will only work if deployed along with other Nuvla services.
 See [Nuvla](https://github.com/nuvla/deployment) deployment for details.
 
 ### Prerequisites
