@@ -4,9 +4,20 @@ import unittest
 from datetime import datetime, timedelta
 from mock import Mock
 
+import elasticsearch
+
+from es_patch import es_update, es_index_create
+import elasticmock.fake_elasticsearch
+elasticmock.fake_elasticsearch.FakeElasticsearch.update = es_update
+import elasticmock.fake_indices
+elasticmock.fake_indices.FakeIndicesClient.create = es_index_create
+
+from elasticmock import elasticmock
+
 import nuvla.notifs.db as db
-from nuvla.notifs.db import RxTx, RxTxDB, RxTxDriverSqlite, Window, \
-    bytes_to_gb, gb_to_bytes, next_month_first_day
+from nuvla.notifs.db import RxTx, RxTxDB, RxTxDriverES, RxTxDriverSqlite, \
+    Window, bytes_to_gb, gb_to_bytes, next_month_first_day, \
+    DBInconsistentStateError
 
 db_now_orig = db.now
 
@@ -110,6 +121,148 @@ class TestNetworkDBInMem(unittest.TestCase):
         assert ndb._db is not None
 
         rx_workflow_test(ndb)
+
+
+class TestRxTxDriverESDataMgmt(unittest.TestCase):
+
+    def test_data_mgmt(self):
+        data_base = RxTxDriverES._doc_base('foo', 'bar', 1)
+        assert {'ne_id': 'foo', 'iface': 'bar', 'kind': 1} == data_base
+
+        data = RxTxDriverES._doc_build('foo', 'bar', 'eth0', 1)
+        assert 'rxtx' in data
+        assert data.get('rxtx') is not None
+
+        rxtx = RxTx()
+        rxtx.set(3)
+        data = RxTxDriverES._doc_build('foo', 'bar', 'eth0', 1, rxtx=rxtx)
+        assert 'rxtx' in data
+        assert data.get('rxtx') is not None
+        rxtx_updated = RxTxDriverES._rxtx_deserialise(data.get('rxtx'))
+        assert 4 == rxtx_updated.total
+        assert 1 == rxtx_updated.prev
+
+
+class TestRxTxDriverESMockedBase(unittest.TestCase):
+
+    @elasticmock
+    def setUp(self):
+        self.driver = RxTxDriverES()
+        self.driver.connect()
+
+    @elasticmock
+    def tearDown(self):
+        self.driver.index_delete()
+        self.driver.close()
+        self.driver = None
+
+
+class TestRxTxDriverESMockedCreateIndex(unittest.TestCase):
+
+    @elasticmock
+    def test_successive_create_index_throws(self):
+        self.driver = RxTxDriverES()
+        self.driver.index_create(RxTxDriverES.INDEX_NAME)
+        with self.assertRaises(elasticsearch.exceptions.RequestError) as cm:
+            self.driver.index_create(RxTxDriverES.INDEX_NAME)
+        ex = cm.exception
+        self.assertEqual(ex.status_code, 400)
+        self.assertEqual(ex.error, 'resource_already_exists_exception')
+
+    @elasticmock
+    def test_successive_connect_succeeds(self):
+        self.driver = RxTxDriverES()
+        self.driver.connect()
+        self.driver.connect()
+
+
+class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
+
+    def test_init(self):
+        assert self.driver.es is not None
+        assert [] == self.driver._index_all_docs()
+
+    def test_set_get_basic(self):
+        ne_id = 'nuvlaedge/01'
+        iface = 'eth0'
+        kind = 'rx'
+        value = 1
+
+        self.driver.set(ne_id, kind, interface=iface, value=value)
+
+        assert 1 == len(self.driver._index_all_docs())
+
+        rxtx = self.driver.get_data(ne_id, 'foo', 'bar')
+        assert rxtx is None
+        rxtx = self.driver.get_data(ne_id, iface, 'bar')
+        assert rxtx is None
+        rxtx = self.driver.get_data(ne_id, 'foo', kind)
+        assert rxtx is None
+
+        rxtx = self.driver.get_data(ne_id, iface, kind)
+        assert rxtx is not None
+        assert value == rxtx.total
+        assert value == rxtx.prev
+        assert {} == rxtx._above_thld
+        assert None is rxtx.window
+
+    def test_inconsistent_db(self):
+        ne_id = 'nuvlaedge/01'
+        iface = 'eth0'
+        kind = 'rx'
+        value = 1
+
+        self.driver.set(ne_id, kind, interface=iface, value=value)
+        assert 1 == len(self.driver._index_all_docs())
+        rxtx = self.driver.get_data(ne_id, iface, kind)
+        assert rxtx is not None
+        assert value == rxtx.total
+        assert value == rxtx.prev
+        assert {} == rxtx._above_thld
+        assert None is rxtx.window
+
+        doc = self.driver._doc_build(ne_id, kind, iface, value)
+        self.driver._insert(doc)
+        assert 2 == len(self.driver._index_all_docs())
+        self.assertRaises(DBInconsistentStateError, self.driver.get_data,
+                          *(ne_id, iface, kind))
+
+    def test_set_get_reset_workflow(self):
+        def rx_validate(rx, total, prev):
+            assert rx is not None
+            assert {} == rx._above_thld
+            assert total == rx.total
+            assert prev == rx.prev
+
+        ne_id = 'nuvlaedge/01'
+        iface = 'eth0'
+        kind = 'rx'
+
+        self.driver.set(ne_id, kind, interface=iface, value=1)
+        assert 1 == len(self.driver._index_all_docs())
+
+        rx = self.driver.get_data(ne_id, iface, kind)
+        rx_validate(rx, 1, 1)
+
+        self.driver.set(ne_id, kind, interface=iface, value=2)
+        assert 1 == len(self.driver._index_all_docs())
+
+        rx = self.driver.get_data(ne_id, iface, kind)
+        rx_validate(rx, 2, 2)
+
+        self.driver.reset(ne_id, iface, kind)
+        rx = self.driver.get_data(ne_id, iface, kind)
+        rx_validate(rx, 0, 2)
+
+        self.driver.set(ne_id, kind, interface=iface, value=10)
+        assert 1 == len(self.driver._index_all_docs())
+
+        rx = self.driver.get_data(ne_id, iface, kind)
+        rx_validate(rx, 8, 10)
+
+        self.driver.reset(ne_id, iface, kind)
+        rx = self.driver.get_data(ne_id, iface, kind)
+        rx_validate(rx, 0, 10)
 
 
 class TestRxTxDriverSqlightInit(unittest.TestCase):

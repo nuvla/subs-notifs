@@ -1,10 +1,11 @@
 from pprint import pformat
+import os
 import signal
 import time
 import threading
 import traceback
 
-from nuvla.notifs.db import RxTxDB, RxTxDriverSqlite
+from nuvla.notifs.db import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.subscription import SelfUpdatingDict, \
     SubscriptionConfig, SUBS_CONF_TOPIC
@@ -24,6 +25,22 @@ RESOURCE_KIND_NE = 'nuvlabox'
 RESOURCE_KIND_EVENT = 'event'
 RESOURCE_KIND_DATARECORD = 'data-record'
 DB_FILENAME='/opt/subs-notifs/subs-notifs.db'
+ES_HOSTS = [{'host': 'es', 'port': 9200}]
+
+
+def es_hosts():
+    """
+    Expected env var: ES_HOSTS=es1:9201,es2:92002
+    :return:
+    """
+    if 'ES_HOSTS' in os.environ:
+        es_conf = []
+        for es in os.environ['ES_HOSTS'].split(','):
+            host, port = es.split(':')
+            es_conf.append({'host': host, 'port': int(port)})
+        if es_conf:
+            return es_conf
+    return ES_HOSTS
 
 
 def ne_telem_process(msg, sc: SelfUpdatingDict, net_db: RxTxDB,
@@ -55,7 +72,7 @@ def wait_sc_populated(sc: SelfUpdatingDict, resource_kind: str, sleep=5, timeout
 
 def subs_notif_nuvla_edge_telemetry(sc: SelfUpdatingDict):
 
-    db_driver = RxTxDriverSqlite(DB_FILENAME)
+    db_driver = RxTxDriverES(hosts=es_hosts())
     db_driver.connect()
     net_db = RxTxDB(db_driver)
 

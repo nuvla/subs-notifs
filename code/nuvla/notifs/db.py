@@ -1,15 +1,31 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Union
+import base64
 import math
 import pickle
 import re
 import sqlite3
 
+import elasticsearch
+
 from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
-from nuvla.notifs.log import get_logger
+from nuvla.notifs.log import get_logger, stdout_handler
 
 log = get_logger('db')
+
+import logging
+
+urllib3_logger = logging.getLogger('urllib3')
+urllib3_logger.setLevel(logging.DEBUG)
+urllib3_logger.addHandler(stdout_handler)
+
+es_logger = logging.getLogger('elasticsearch')
+es_logger.setLevel(logging.DEBUG)
+es_logger.addHandler(stdout_handler)
+
+from pprint import pp
+pp(logging.Logger.manager.loggerDict)
 
 
 def bytes_to_gb(value_bytes: int) -> float:
@@ -27,6 +43,10 @@ def now() -> datetime:
 def next_month_first_day() -> datetime:
     return (now().replace(day=1) + timedelta(days=32)) \
         .replace(day=1, minute=0, second=0, microsecond=0)
+
+
+class DBInconsistentStateError(Exception):
+    pass
 
 
 class Window:
@@ -165,6 +185,183 @@ class RxTxDriverABC(ABC):
         :param kind:
         :return:
         """
+
+
+class RxTxDriverES:
+
+    INDEX_NAME = 'subsnotifs-rxtx'
+    HOSTS = [{'host': 'localhost', 'port': 9200}]
+
+    def __init__(self, hosts:Union[None, list] = None):
+        """
+        :param hosts: list of config dicts: {'host': 'localhost', 'port': 9200}
+        """
+        self.es = elasticsearch.Elasticsearch(hosts=hosts or self.HOSTS)
+
+    def index_create(self, index=None):
+        self.es.indices.create(index=index or self.INDEX_NAME)
+
+    def connect(self):
+        try:
+            self.index_create(self.INDEX_NAME)
+        except elasticsearch.exceptions.RequestError as ex:
+            if ex.status_code == 400 and \
+                    ex.error == 'resource_already_exists_exception':
+                log.warning(ex.info)
+            else:
+                raise ex
+
+    def index_delete(self, index=None):
+        self.es.indices.delete(index=index or self.INDEX_NAME)
+
+    def close(self):
+        self.es = None
+
+    def _index_content(self) -> dict:
+        return self.es.search(index=self.INDEX_NAME,
+                              body={'query': {'match_all': {}}})
+
+    def _index_all_docs(self) -> dict:
+        return self._index_content()['hits']['hits']
+
+    def _find(self, query) -> dict:
+        return self.es.search(index=self.INDEX_NAME, body=query)
+
+    def _data_query(self, ne_id, iface, kind) -> dict:
+        return {
+            'query': {
+                'bool': {
+                    'filter': [
+                        {'term': {'ne_id': ne_id}},
+                        {'term': {'iface': iface}},
+                        {'term': {'kind': kind}}
+                    ]
+                }
+            }
+        }
+
+    def _insert(self, doc):
+        return self.es.index(index=self.INDEX_NAME, refresh=True, body=doc)
+
+    def _update(self, _id, rxtx: str):
+        self.es.update(self.INDEX_NAME, _id, body={'doc': {'rxtx': rxtx}},
+                       refresh=True)
+
+    @staticmethod
+    def _doc_base(ne_id, iface, kind) -> dict:
+        return {'ne_id': ne_id, 'kind': kind, 'iface': iface}
+
+    @staticmethod
+    def _rxtx_serialise(rxtx: RxTx) -> str:
+        return base64.b64encode(
+            pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
+        ).decode()
+
+    @staticmethod
+    def _rxtx_deserialise(rxtx: str):
+        return pickle.loads(base64.b64decode(rxtx))
+
+    @classmethod
+    def _rxtx_from_value_serialised(cls, value: int, rxtx=None) -> str:
+        if None is rxtx:
+            rxtx = RxTx()
+        rxtx.set(value)
+        return cls._rxtx_serialise(rxtx)
+
+    @classmethod
+    def _rxtx_from_es_resp(cls, es_resp: dict) -> RxTx:
+        hits = es_resp['hits']['hits']
+        if 1 == len(hits):
+            data = hits[0]['_source']
+            log.debug('Found data: %s', data)
+            return cls._rxtx_deserialise(data['rxtx'])
+
+    @classmethod
+    def _doc_build(cls, ne_id: str, kind: str, iface, value, rxtx=None) -> dict:
+        return {**cls._doc_base(ne_id, iface, kind),
+                'rxtx': cls._rxtx_from_value_serialised(value, rxtx)}
+
+    def _total_found(self, es_resp) -> int:
+        return es_resp['hits']['total']['value']
+
+    def set(self, ne_id: str, kind: str, interface=None, value=None):
+        """Implemented as UPSERT.
+
+        :param ne_id:
+        :param kind:
+        :param interface:
+        :param value:
+        :return:
+        """
+        query = self._data_query(ne_id, interface, kind)
+        resp = self._find(query)
+        if self._total_found(resp) == 1:
+            _id = resp['hits']['hits'][0]['_id']
+            rxtx: RxTx = self._rxtx_from_es_resp(resp)
+            if rxtx:
+                doc = self._doc_build(ne_id, kind, interface, value, rxtx)
+                log.debug('To update: %s', doc)
+                rxtx_ser = self._rxtx_from_value_serialised(value, rxtx)
+                self._update(_id, rxtx_ser)
+        else:
+            log.debug('Adding new: %s, %s, %s', ne_id, kind, interface)
+            doc = self._doc_build(ne_id, kind, interface, value)
+            resp = self._insert(doc)
+            log.debug(resp)
+
+    def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
+        """
+        Throws InconsistentDBStateError in case more than one object are found
+        in DB.
+
+        :param ne_id:
+        :param iface:
+        :param kind:
+        :return:
+        """
+        # log.debug('Index content: %s', self._index_content())
+
+        query = self._data_query(ne_id, iface, kind)
+        resp = self._find(query)
+        log.debug('Search resp: %s', resp)
+        num_found = resp['hits']['total']['value']
+        log.debug('Found num: %s', num_found)
+        if num_found == 0:
+            return None
+        if num_found == 1:
+            return self._rxtx_from_es_resp(resp)
+        if num_found > 1:
+            raise DBInconsistentStateError(f'More than one object for {query}')
+
+    def reset(self, ne_id, iface, kind):
+        resp = self._find(self._data_query(ne_id, iface, kind))
+        if self._total_found(resp) == 1:
+            rxtx: RxTx = self._rxtx_from_es_resp(resp)
+            if rxtx:
+                rxtx.reset()
+                log.debug('To update: %s', rxtx)
+                self._update(resp['hits']['hits'][0]['_id'],
+                             self._rxtx_serialise(rxtx))
+    
+    def set_above_thld(self, ne_id, iface, kind, subs_id):
+        resp = self._find(self._data_query(ne_id, iface, kind))
+        if self._total_found(resp) == 1:
+            rxtx: RxTx = self._rxtx_from_es_resp(resp)
+            if rxtx:
+                rxtx.set_above_thld(subs_id)
+                log.debug('To set above thld: %s', rxtx)
+                self._update(resp['hits']['hits'][0]['_id'],
+                             self._rxtx_serialise(rxtx))
+
+    def reset_above_thld(self, ne_id, iface, kind, subs_id):
+        resp = self._find(self._data_query(ne_id, iface, kind))
+        if self._total_found(resp) == 1:
+            rxtx: RxTx = self._rxtx_from_es_resp(resp)
+            if rxtx:
+                rxtx.reset_above_thld(subs_id)
+                log.debug('To reset above thld: %s', rxtx)
+                self._update(resp['hits']['hits'][0]['_id'],
+                             self._rxtx_serialise(rxtx))
 
 
 class RxTxDriverSqlite:

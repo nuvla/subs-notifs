@@ -1,6 +1,6 @@
 import unittest
 
-from db_test import RxTxDriverSqliteBaseTest
+from db_test import RxTxDriverSqliteBaseTest, TestRxTxDriverESMockedBase
 from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes, \
     RxTxDriverInMem
 from nuvla.notifs.matcher import SubscriptionConfigMatcher, \
@@ -924,4 +924,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
 
 class TestNuvlaEdgeSubsConfMatcherDBSqlite(RxTxDriverSqliteBaseTest,
                                            TestNuvlaEdgeSubsConfMatcherDBInMem):
+    pass
+
+
+class TestNuvlaEdgeSubsConfMatcherDBES(TestRxTxDriverESMockedBase,
+                                       TestNuvlaEdgeSubsConfMatcherDBInMem):
     pass
