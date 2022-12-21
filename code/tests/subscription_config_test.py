@@ -45,6 +45,8 @@ class TestSubscriptionConfig(unittest.TestCase):
 
     def test_tags_match(self):
         sc = SubscriptionConfig({})
+        assert False is sc.tags_match(None)
+        assert False is sc.tags_match([])
         assert False is sc.tags_match(['foo'])
 
         sc = SubscriptionConfig({'resource-filter': "tags='foo'"})

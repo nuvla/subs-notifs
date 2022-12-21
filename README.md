@@ -44,9 +44,6 @@ pytest tests/ --junitxml=test-report.xml -v
 
 ## Building 
 
-This repository is already linked with Travis CI, so with every commit, a new
-Docker image is released.
-
 **If you're developing and testing locally in your own machine**, simply
 run `docker build .`
 

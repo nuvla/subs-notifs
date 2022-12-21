@@ -15,10 +15,11 @@ class SubscriptionConfigMatcher:
     def __init__(self, metrics: ResourceMetrics):
         self.m = metrics
 
-    def resource_subscribed(self, sc: SubscriptionConfig) -> bool:
-        return sc.is_enabled() and \
-               sc.can_view_resource(self.m.get('acl', self.m.get('ACL', {}))) and \
-               sc.tags_match(self.m.get('tags', self.m.get('TAGS', [])))
+    def resource_subscribed(self, subs_conf: SubscriptionConfig) -> bool:
+        log.debug('resource_subscribed: SubscriptionConfig %s', subs_conf)
+        return subs_conf.is_enabled() and \
+               subs_conf.can_view_resource(self.m.get('acl', self.m.get('ACL', {}))) and \
+               subs_conf.tags_match(self.m.get('tags', self.m.get('TAGS', [])))
 
     def resource_subscriptions(self, subs_confs: List[SubscriptionConfig]) -> \
             Iterator[SubscriptionConfig]:
@@ -42,6 +43,10 @@ def metric_not_found_ex_handler(func):
 
 
 class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
+    """
+    Given `metrics` from NuvlaEdge, matches them against user provided criteria
+    defined in subscription configs.
+    """
 
     MATCHED = {'matched': True,
                'recovery': False}
@@ -67,12 +72,12 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
         if sc.is_metric_cond('load', '>'):
             if self._load_moved_above_thld(sc):
                 return self.MATCHED
-            elif self._load_moved_below_thld(sc):
+            if self._load_moved_below_thld(sc):
                 return self.MATCHED_RECOVERY
         elif sc.is_metric_cond('load', '<'):
             if self._load_moved_below_thld(sc):
                 return self.MATCHED
-            elif self._load_moved_above_thld(sc):
+            if self._load_moved_above_thld(sc):
                 return self.MATCHED_RECOVERY
         return None
 
@@ -87,19 +92,19 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
         if sc.is_metric_cond('ram', '>'):
             if self._ram_moved_above_thld(sc):
                 return self.MATCHED
-            elif self._ram_moved_below_thld(sc):
+            if self._ram_moved_below_thld(sc):
                 return self.MATCHED_RECOVERY
         elif sc.is_metric_cond('ram', '<'):
             if self._ram_moved_below_thld(sc):
                 return self.MATCHED
-            elif self._ram_moved_above_thld(sc):
+            if self._ram_moved_above_thld(sc):
                 return self.MATCHED_RECOVERY
         return None
 
-    def disk_pct_curr(self, sc):
+    def disk_pct_curr(self, sc: SubscriptionConfig):
         return self.m.disk_pct_curr(sc.criteria_dev_name())
 
-    def disk_pct_prev(self, sc):
+    def disk_pct_prev(self, sc: SubscriptionConfig):
         return self.m.disk_pct_prev(sc.criteria_dev_name())
 
     def _disk_moved_above_thld(self, sc: SubscriptionConfig) -> Union[None, float]:
@@ -119,12 +124,12 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
         if sc.is_metric_cond('disk', '>'):
             if self._disk_moved_above_thld(sc):
                 return self.MATCHED
-            elif self._disk_moved_below_thld(sc):
+            if self._disk_moved_below_thld(sc):
                 return self.MATCHED_RECOVERY
         elif sc.is_metric_cond('disk', '<'):
             if self._disk_moved_below_thld(sc):
                 return self.MATCHED
-            elif self._disk_moved_above_thld(sc):
+            if self._disk_moved_above_thld(sc):
                 return self.MATCHED_RECOVERY
         return None
 
@@ -137,11 +142,11 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
     def _network_rxtx_above_thld(self, sc: SubscriptionConfig, kind: str) -> Union[None, Dict]:
 
         def ge(val, sc: SubscriptionConfig) -> bool:
-            "greater than or equal"
+            """greater than or equal"""
             return val and val >= sc.criteria_value()
 
         def le(val, sc: SubscriptionConfig) -> bool:
-            "less than or equal"
+            """less than or equal"""
             return val and val <= sc.criteria_value()
 
         if not sc.is_metric_cond(f'network-{kind}', '>'):
@@ -159,12 +164,12 @@ class NuvlaEdgeSubsConfMatcher(SubscriptionConfigMatcher):
             except KeyError:
                 return None
             if ge(val, sc) and \
-                    not self._net_db.get_above_thld(m['id'], dev_name, kind, sc['id']):
-                self._net_db.set_above_thld(m['id'], dev_name, kind, sc['id'])
+                    not self._net_db.get_above_thld(sc['id'], m['id'], dev_name, kind):
+                self._net_db.set_above_thld(sc['id'], m['id'], dev_name, kind)
                 return {'interface': dev_name, 'value': val}
             if le(val, sc) and \
-                    self._net_db.get_above_thld(m['id'], dev_name, kind, sc['id']):
-                self._net_db.reset_above_thld(m['id'], dev_name, kind, sc['id'])
+                    self._net_db.get_above_thld(sc['id'], m['id'], dev_name, kind):
+                self._net_db.reset_above_thld(sc['id'], m['id'], dev_name, kind)
 
         return None
 

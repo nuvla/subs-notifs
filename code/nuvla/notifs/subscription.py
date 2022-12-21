@@ -1,9 +1,13 @@
+"""
+A set of classes for holding and updating local representation of the
+notification subscription configurations.
+"""
 import inspect
 import logging
 import re
 import time
 
-from typing import List
+from typing import List, Union
 from threading import Lock
 
 from nuvla.notifs.log import get_logger
@@ -15,23 +19,26 @@ SUBS_CONF_TOPIC = 'subscription-config'
 
 
 class SubscriptionConfig(dict):
+    """
+    Dictionary holding notification subscription configuration. Contains helper
+    methods for easier data access and predicates to checking states and
+    internal conditions.
+    """
     def __init__(self, *args, **kwargs):
         dict.__init__(self, *args, **kwargs)
 
     def __getattr__(self, attr):
         return self[attr]
 
-    def criteria_value(self):
+    def criteria_value(self) -> Union[int, float, bool]:
         val = self['criteria']['value']
         if self.criteria_kind() == 'numeric':
             if self['criteria'].get('value-type') == 'double' or '.' in val:
                 return float(val)
-            else:
-                return int(val)
-        elif self.criteria_kind() == 'boolean':
+            return int(val)
+        if self.criteria_kind() == 'boolean':
             return val in ['true', 'True']
-        else:
-            return val
+        return val
 
     def criteria_metric(self):
         return self['criteria']['metric']
@@ -42,12 +49,17 @@ class SubscriptionConfig(dict):
     def criteria_dev_name(self):
         return self['criteria'].get('dev-name')
 
+    def criteria_reset_interval(self):
+        return self['criteria'].get('reset-interval')
+
+    def criteria_reset_start_date(self):
+        return self['criteria'].get('reset-start-date')
+
     def _owner(self):
         owners = self.get('acl', {}).get('owners', [])
         if owners:
             return owners[0]
-        else:
-            return None
+        return None
 
     def is_enabled(self) -> bool:
         return self.get('enabled', False)
@@ -71,21 +83,20 @@ class SubscriptionConfig(dict):
             return list(
                 filter(lambda x: x != '' and not re.match('tags *?=', x),
                        self['resource-filter'].split("'")))
-        else:
-            return []
+        return []
 
-    def tags_match(self, tags: List) -> bool:
-        return bool(set(self._tags_from_resource_filter()).intersection(set(tags)))
+    def tags_match(self, tags: Union[List, None]) -> bool:
+        log.debug('tags_match: tags %s', tags)
+        if tags:
+            return bool(set(self._tags_from_resource_filter()).intersection(set(tags)))
+        return False
 
 
 class LoggingDict(dict):
-
-    def __init__(self, name, *args, **kwargs):
-        self.name: str = name
-        dict.__init__(self, *args, **kwargs)
-        self._log_caller()
-        log.debug(f'{self.name} __init__: args: {args}, kwargs: {kwargs}')
-        self.__lock = Lock()
+    """
+    An extension of the `dict` object to provide dict-based classes with logging
+    the access to the attributes of the dictionary.
+    """
 
     def _log_caller(self):
         stack = inspect.stack()
@@ -93,30 +104,42 @@ class LoggingDict(dict):
         caller = stack[2]
         cc = caller.code_context
         code_context = cc[0] if cc and len(cc) >= 1 else ''
-        if log.level == logging.DEBUG:
-            log.debug(
-                f'{self.name}.{cls_fn_name} called by {caller.filename}:{caller.lineno} '
-                f'{caller.function} {code_context}')
+        log.debug('%s.%s called by %s:%s %s %s', self.name, cls_fn_name,
+                  caller.filename, caller.lineno, caller.function, code_context)
+
+    @staticmethod
+    def _is_debug() -> bool:
+        return log.level == logging.DEBUG
+
+    def __init__(self, name, *args, **kwargs):
+        self.name: str = name
+        dict.__init__(self, *args, **kwargs)
+        if self._is_debug():
+            self._log_caller()
+            log.debug('%s __init__: args: %s, kwargs: %s', self.name, args, kwargs)
+        self.__lock = Lock()
 
     def __setitem__(self, key, value):
         with self.__lock:
             dict.__setitem__(self, key, value)
-        self._log_caller()
-        if log.level == logging.DEBUG:
-            log.debug(f'{self.name} set {key} = {value}')
+        if self._is_debug():
+            self._log_caller()
+            log.debug('%s set %s = %s', self.name, key, value)
 
     def __repr__(self):
-        return '%s(%s)' % (type(self).__name__, dict.__repr__(self))
+        return f'{type(self).__name__}({dict.__repr__(self)})'
 
     def __delitem__(self, key):
         with self.__lock:
             try:
                 dict.__delitem__(self, key)
-                self._log_caller()
-                log.debug(f'{self.name} del {key}')
+                if self._is_debug():
+                    self._log_caller()
+                    log.debug('%s del %s', self.name, key)
             except KeyError:
-                self._log_caller()
-                log.error(f'{self.name} del {key}: no such key')
+                if self._is_debug():
+                    self._log_caller()
+                    log.error('%s del %s: no such key', self.name, key)
 
     def __getitem__(self, key):
         """Try with keys in upper case to account for ksqlDB key transformation.
@@ -130,12 +153,11 @@ class LoggingDict(dict):
                 raise ex
 
     def update(self, *args, **kwargs):
-        if log.level == logging.DEBUG:
-            log.debug(f'{self.name} update: args: {args}, kwargs: {kwargs}')
+        log.debug('%s update: args: %s, kwargs: %s', self.name, args, kwargs)
         dict.update(self, *args, **kwargs)
-        self._log_caller()
-        if log.level == logging.DEBUG:
-            log.debug(f'{self.name} updated: {self}')
+        if self._is_debug():
+            self._log_caller()
+            log.debug('%s updated: %s', self.name, self)
 
     def empty(self):
         return 0 == len(list(self.keys()))
@@ -143,6 +165,10 @@ class LoggingDict(dict):
 
 class SelfUpdatingDict(LoggingDict):
     """Self-updating dict.
+
+    Provided `updater` object (of type `DictUpdater`) will be used to update the
+    instance of the SelfUpdatingDict class with the values of the
+    `sub_dict_class` class.
     """
 
     def __init__(self, name, updater: DictUpdater, sub_dict_class, *args,
@@ -177,7 +203,7 @@ class SelfUpdatingDict(LoggingDict):
         t_end = time.time() + timeout
         while self.empty():
             if time.time() >= t_end:
-                raise Exception(f'Timed out waiting dict is not empty.')
+                raise Exception('Timed out waiting dict is not empty.')
             time.sleep(0.1)
 
     def wait_key_set(self, key, timeout=5):

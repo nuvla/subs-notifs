@@ -1,6 +1,6 @@
 import unittest
 
-from db_test import RxTxDriverSqliteBaseTest, TestRxTxDriverESMockedBase
+from db_test import TestRxTxDriverESMockedBase
 from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes, \
     RxTxDriverInMem
 from nuvla.notifs.matcher import SubscriptionConfigMatcher, \
@@ -920,11 +920,6 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         assert res[0]['subs_description'] == 'NE network Rx'
         assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
         assert True is net_db.get_above_thld(*resource, 'subscription-config/01')
-
-
-class TestNuvlaEdgeSubsConfMatcherDBSqlite(RxTxDriverSqliteBaseTest,
-                                           TestNuvlaEdgeSubsConfMatcherDBInMem):
-    pass
 
 
 class TestNuvlaEdgeSubsConfMatcherDBES(TestRxTxDriverESMockedBase,

@@ -51,4 +51,3 @@ def es_index_create(self, index, body=None, params=None, headers=None):
     else:
         raise RequestError(400, 'resource_already_exists_exception',
                            f'index [{index}] already exists')
-

@@ -5,7 +5,7 @@ from kafka import KafkaProducer
 
 producer = KafkaProducer(bootstrap_servers='localhost:9092')
 
-topic = 'NB_TELEM_RESOURCES_REKYED_S'
+topic = 'NE_TELEM_RESOURCES_REKYED_S'
 
 _id = 'nuvlabox/01'
 user = 'user/00000000-0000-0000-0000-000000000000'

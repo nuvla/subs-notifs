@@ -15,7 +15,7 @@ elasticmock.fake_indices.FakeIndicesClient.create = es_index_create
 from elasticmock import elasticmock
 
 import nuvla.notifs.db as db
-from nuvla.notifs.db import RxTx, RxTxDB, RxTxDriverES, RxTxDriverSqlite, \
+from nuvla.notifs.db import RxTxValue, RxTx, RxTxDB, RxTxDriverES, RxTxDriverSqlite, \
     Window, bytes_to_gb, gb_to_bytes, next_month_first_day, \
     DBInconsistentStateError
 
@@ -45,69 +45,149 @@ class TestDBUtils(unittest.TestCase):
         assert 4.71 == bytes_to_gb(gb_to_bytes(4.71))
 
 
+class TestValue(unittest.TestCase):
+
+    def test_init(self):
+        v = RxTxValue()
+        assert 0 == v.total()
+
+    def test_set(self):
+        v = RxTxValue()
+        v.set(0)
+        assert 0 == v.total()
+
+        v = RxTxValue()
+        v.set(1)
+        assert 0 == v.total()
+
+        # monotonic growth
+        v = RxTxValue()
+        v.set(1)
+        assert 0 == v.total()
+        v.set(2)
+        assert 1 == v.total()
+        v.set(3)
+        assert 2 == v.total()
+        v.set(3)
+        assert 2 == v.total()
+        v.set(5)
+        assert 4 == v.total()
+
+        # non-monotonic growth with "zeroing"
+        v = RxTxValue()
+        v.set(1)
+        assert 0 == v.total()
+        assert [[1, 1]] == v._values
+        v.set(2)
+        assert 1 == v.total()
+        assert [[1, 2]] == v._values
+        v.set(5)
+        assert 4 == v.total()
+        assert [[1, 5]] == v._values
+        v.set(2)
+        assert 6 == v.total()
+        assert [[1, 5], [0, 2]] == v._values
+        v.set(4)
+        assert 8 == v.total()
+        assert [[1, 5], [0, 4]] == v._values
+        v.set(3)
+        assert 11 == v.total()
+        assert [[1, 5], [0, 4], [0, 3]] == v._values
+
+    def test_reset(self):
+        v = RxTxValue()
+        v.set(1)
+        assert 0 == v.total()
+        v.reset()
+        assert 0 == v.total()
+
+        v = RxTxValue()
+        v.set(1)
+        assert 0 == v.total()
+        v.set(3)
+        assert 2 == v.total()
+        v.reset()
+        assert 0 == v.total()
+
+
 class TestRxTx(unittest.TestCase):
 
     def test_init(self):
         rx = RxTx()
-        assert 0 == rx.total
-        assert 0 == rx.prev
+        assert 0 == rx.total()
 
-    def test_load_pers(self):
+    def test_load_pct(self):
         rx = RxTx()
 
         rx.set(1)
-        assert 1 == rx.prev
-        assert 1 == rx.total
+        assert 0 == rx.total()
 
         rx.set(2)
-        assert 2 == rx.prev
-        assert 2 == rx.total
+        assert 1 == rx.total()
 
         rx.set(2)
-        assert 2 == rx.prev
-        assert 2 == rx.total
+        assert 1 == rx.total()
 
         rx.set(0)
-        assert 0 == rx.prev
-        assert 2 == rx.total
+        assert 1 == rx.total()
 
         rx.set(1)
-        assert 1 == rx.prev
-        assert 3 == rx.total
+        assert 2 == rx.total()
+
+    def test_to_dict(self):
+        rx = RxTx()
+        rx.set(1)
+        assert {'value': [[1, 1]],
+                'above_thld': False,
+                'window': None} == rx.to_dict()
+
+        rx.reset()
+        assert {'value': [],
+                'above_thld': False,
+                'window': None} == rx.to_dict()
+
+        rx.set_above_thld()
+        assert {'value': [],
+                'above_thld': True,
+                'window': None} == rx.to_dict()
+
+        rx.reset()
+        assert {'value': [],
+                'above_thld': False,
+                'window': None} == rx.to_dict()
+
+        rx.set_window(Window())
+        assert {'value': [],
+                'above_thld': False,
+                'window': {'ts_window': 'month',
+                           'ts_reset': next_month_first_day().timestamp()}} \
+               == rx.to_dict()
 
 
-def rx_workflow_test(rxtx):
-    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 0})
-    assert 0 == rxtx.get_rx('foo', 'eth0')
-    assert 0 == rxtx.get_rx_data('foo', 'eth0').prev
+def rx_workflow_test(rxtx: RxTxDB):
+    rxtx.set_rx('foo', 'bar', {'interface': 'eth0', 'value': 0})
+    assert 0 == rxtx.get_rx('foo', 'bar', 'eth0')
 
-    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 1})
-    assert 1 == rxtx.get_rx('foo', 'eth0')
-    assert 1 == rxtx.get_rx_data('foo', 'eth0').prev
+    rxtx.set_rx('foo', 'bar', {'interface': 'eth0', 'value': 1})
+    assert 1 == rxtx.get_rx('foo', 'bar', 'eth0')
 
-    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 3})
-    assert 3 == rxtx.get_rx('foo', 'eth0')
-    assert 3 == rxtx.get_rx_data('foo', 'eth0').prev
+    rxtx.set_rx('foo', 'bar', {'interface': 'eth0', 'value': 3})
+    assert 3 == rxtx.get_rx('foo', 'bar', 'eth0')
 
-    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 0})
-    assert 3 == rxtx.get_rx('foo', 'eth0')
-    assert 0 == rxtx.get_rx_data('foo', 'eth0').prev
+    rxtx.set_rx('foo', 'bar', {'interface': 'eth0', 'value': 0})
+    assert 3 == rxtx.get_rx('foo', 'bar', 'eth0')
 
-    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 2})
-    assert 5 == rxtx.get_rx('foo', 'eth0')
-    assert 2 == rxtx.get_rx_data('foo', 'eth0').prev
+    rxtx.set_rx('foo', 'bar', {'interface': 'eth0', 'value': 2})
+    assert 5 == rxtx.get_rx('foo', 'bar', 'eth0')
 
-    rxtx.set_tx('foo', {'interface': 'eth0', 'value': 2})
-    assert 2 == rxtx.get_tx('foo', 'eth0')
-    assert 2 == rxtx.get_tx_data('foo', 'eth0').prev
+    rxtx.set_tx('foo', 'bar', {'interface': 'eth0', 'value': 2})
+    assert 0 == rxtx.get_tx('foo', 'bar', 'eth0')
 
-    rxtx.set_rx('foo', {'interface': 'eth0', 'value': 5})
-    assert 8 == rxtx.get_rx('foo', 'eth0')
-    assert 5 == rxtx.get_rx_data('foo', 'eth0').prev
+    rxtx.set_rx('foo', 'bar', {'interface': 'eth0', 'value': 5})
+    assert 8 == rxtx.get_rx('foo', 'bar', 'eth0')
 
-    rxtx.set_tx('foo', {'interface': 'eth0', 'value': 5})
-    assert 5 == rxtx.get_tx('foo', 'eth0')
-    assert 5 == rxtx.get_tx_data('foo', 'eth0').prev
+    rxtx.set_tx('foo', 'bar', {'interface': 'eth0', 'value': 5})
+    assert 3 == rxtx.get_tx('foo', 'bar', 'eth0')
 
 
 class TestNetworkDBInMem(unittest.TestCase):
@@ -126,28 +206,32 @@ class TestNetworkDBInMem(unittest.TestCase):
 class TestRxTxDriverESDataMgmt(unittest.TestCase):
 
     def test_data_mgmt(self):
-        data_base = RxTxDriverES._doc_base('foo', 'bar', 1)
-        assert {'ne_id': 'foo', 'iface': 'bar', 'kind': 1} == data_base
+        data_base = RxTxDriverES._doc_base('subs/01', 'ne/01', 'eth0', 'rx')
+        assert {'subs_id': 'subs/01',
+                'ne_id': 'ne/01',
+                'iface': 'eth0',
+                'kind': 'rx'} == data_base
 
-        data = RxTxDriverES._doc_build('foo', 'bar', 'eth0', 1)
+        data = RxTxDriverES._doc_build('subs/01', 'ne/01', 'eth0', 'rx', 1)
         assert 'rxtx' in data
         assert data.get('rxtx') is not None
 
         rxtx = RxTx()
         rxtx.set(3)
-        data = RxTxDriverES._doc_build('foo', 'bar', 'eth0', 1, rxtx=rxtx)
+        data = RxTxDriverES._doc_build('subs/01', 'ne/01', 'eth0', 'rx', 1,
+                                       rxtx=rxtx)
         assert 'rxtx' in data
         assert data.get('rxtx') is not None
-        rxtx_updated = RxTxDriverES._rxtx_deserialise(data.get('rxtx'))
-        assert 4 == rxtx_updated.total
-        assert 1 == rxtx_updated.prev
+        rxtx_updated = RxTxDriverES._rxtx_deserialize(data.get('rxtx'))
+        print(rxtx_updated)
+        assert 1 == rxtx_updated.total()
 
 
 class TestRxTxDriverESMockedBase(unittest.TestCase):
 
     @elasticmock
     def setUp(self):
-        self.driver = RxTxDriverES()
+        self.driver: RxTxDriverES = RxTxDriverES()
         self.driver.connect()
 
     @elasticmock
@@ -183,160 +267,86 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
         assert [] == self.driver._index_all_docs()
 
     def test_set_get_basic(self):
+        subs_id = 'subscription/01'
         ne_id = 'nuvlaedge/01'
         iface = 'eth0'
         kind = 'rx'
         value = 1
 
-        self.driver.set(ne_id, kind, interface=iface, value=value)
+        self.driver.set(subs_id, ne_id, kind, interface=iface, value=value)
 
         assert 1 == len(self.driver._index_all_docs())
 
-        rxtx = self.driver.get_data(ne_id, 'foo', 'bar')
+        rxtx = self.driver.get_data(subs_id, ne_id, 'foo', 'bar')
         assert rxtx is None
-        rxtx = self.driver.get_data(ne_id, iface, 'bar')
+        rxtx = self.driver.get_data(subs_id, ne_id, iface, 'bar')
         assert rxtx is None
-        rxtx = self.driver.get_data(ne_id, 'foo', kind)
+        rxtx = self.driver.get_data(subs_id, ne_id, 'foo', kind)
         assert rxtx is None
 
-        rxtx = self.driver.get_data(ne_id, iface, kind)
+        rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None
-        assert value == rxtx.total
-        assert value == rxtx.prev
-        assert {} == rxtx._above_thld
+        assert 0 == rxtx.total()
+        assert False is rxtx.above_thld
         assert None is rxtx.window
 
     def test_inconsistent_db(self):
+        subs_id = 'subscription/01'
         ne_id = 'nuvlaedge/01'
         iface = 'eth0'
         kind = 'rx'
         value = 1
 
-        self.driver.set(ne_id, kind, interface=iface, value=value)
+        self.driver.set(subs_id, ne_id, kind, interface=iface, value=value)
         assert 1 == len(self.driver._index_all_docs())
-        rxtx = self.driver.get_data(ne_id, iface, kind)
+        rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None
-        assert value == rxtx.total
-        assert value == rxtx.prev
-        assert {} == rxtx._above_thld
+        assert 0 == rxtx.total()
+        assert False is rxtx.above_thld
         assert None is rxtx.window
 
-        doc = self.driver._doc_build(ne_id, kind, iface, value)
+        doc = self.driver._doc_build(subs_id, ne_id, kind, iface, value)
         self.driver._insert(doc)
         assert 2 == len(self.driver._index_all_docs())
         self.assertRaises(DBInconsistentStateError, self.driver.get_data,
-                          *(ne_id, iface, kind))
+                          *(subs_id, ne_id, iface, kind))
 
     def test_set_get_reset_workflow(self):
-        def rx_validate(rx, total, prev):
+        def rx_validate(rx, total):
             assert rx is not None
-            assert {} == rx._above_thld
-            assert total == rx.total
-            assert prev == rx.prev
+            assert total == rx.total()
+            assert False is rx.above_thld
 
+        subs_id = 'subscription/01'
         ne_id = 'nuvlaedge/01'
         iface = 'eth0'
         kind = 'rx'
 
-        self.driver.set(ne_id, kind, interface=iface, value=1)
+        self.driver.set(subs_id, ne_id, kind, interface=iface, value=1)
         assert 1 == len(self.driver._index_all_docs())
 
-        rx = self.driver.get_data(ne_id, iface, kind)
-        rx_validate(rx, 1, 1)
+        rx = self.driver.get_data(subs_id, ne_id, iface, kind)
+        rx_validate(rx, 0)
 
-        self.driver.set(ne_id, kind, interface=iface, value=2)
+        self.driver.set(subs_id, ne_id, kind, interface=iface, value=2)
         assert 1 == len(self.driver._index_all_docs())
 
-        rx = self.driver.get_data(ne_id, iface, kind)
-        rx_validate(rx, 2, 2)
+        rx = self.driver.get_data(subs_id, ne_id, iface, kind)
+        rx_validate(rx, 1)
 
-        self.driver.reset(ne_id, iface, kind)
-        rx = self.driver.get_data(ne_id, iface, kind)
-        rx_validate(rx, 0, 2)
+        self.driver.reset(subs_id, ne_id, iface, kind)
+        rx = self.driver.get_data(subs_id, ne_id, iface, kind)
+        rx_validate(rx, 0)
 
-        self.driver.set(ne_id, kind, interface=iface, value=10)
+        self.driver.set(subs_id, ne_id, kind, interface=iface, value=10)
         assert 1 == len(self.driver._index_all_docs())
 
-        rx = self.driver.get_data(ne_id, iface, kind)
-        rx_validate(rx, 8, 10)
+        rx = self.driver.get_data(subs_id, ne_id, iface, kind)
+        rx_validate(rx, 0)
 
-        self.driver.reset(ne_id, iface, kind)
-        rx = self.driver.get_data(ne_id, iface, kind)
-        rx_validate(rx, 0, 10)
-
-
-class TestRxTxDriverSqlightInit(unittest.TestCase):
-
-    DB_FILENAME = 'test.db'
-
-    def test_init(self):
-        driver = RxTxDriverSqlite(self.DB_FILENAME)
-        assert driver.con is not None
-        assert driver.cur is None
-        assert os.path.exists(self.DB_FILENAME)
-        driver.connect()
-        assert driver.con is not None
-        assert driver.cur is not None
-        assert os.path.exists(self.DB_FILENAME)
-        driver.close()
-        assert driver.con is not None
-        assert driver.cur is None
-        assert os.path.exists(self.DB_FILENAME)
-        os.unlink(self.DB_FILENAME)
-        assert not os.path.exists(self.DB_FILENAME)
-
-
-class RxTxDriverSqliteBaseTest(unittest.TestCase):
-
-    DB_FILENAME = ':memory:'
-
-    def setUp(self) -> None:
-        self.driver = RxTxDriverSqlite(self.DB_FILENAME)
-        self.driver.connect()
-
-    def tearDown(self) -> None:
-        self.driver.close()
-        if self.DB_FILENAME != ':memory:':
-            os.unlink(self.DB_FILENAME)
-            assert not os.path.exists(self.DB_FILENAME)
-
-
-class TestRxTxDriverSqlight(RxTxDriverSqliteBaseTest):
-
-    def test_driver_set_get(self):
-        self.driver.set('nuvlaedge/01', 'rx', 'eth0', 1)
-        rx = self.driver.get_data('nuvlaedge/01', 'eth0', 'rx')
-        assert 1 == rx.total
-        assert 1 == rx.prev
-        assert {} == rx._above_thld
-        assert None is rx.window
-
-        self.driver.set('nuvlaedge/02', 'rx', 'eth0', 2)
-        rx = self.driver.get_data('nuvlaedge/02', 'eth0', 'rx')
-        assert 2 == rx.total
-        assert 2 == rx.prev
-        assert {} == rx._above_thld
-        assert None is rx.window
-
-        self.driver.reset('nuvlaedge/01', 'eth0', 'rx')
-        rx = self.driver.get_data('nuvlaedge/01', 'eth0', 'rx')
-        assert 0 == rx.total
-        assert 1 == rx.prev
-        assert {} == rx._above_thld
-        assert None is rx.window
-
-        self.driver.reset('nuvlaedge/02', 'eth0', 'rx')
-        rx = self.driver.get_data('nuvlaedge/02', 'eth0', 'rx')
-        assert 0 == rx.total
-        assert 2 == rx.prev
-        assert {} == rx._above_thld
-        assert None is rx.window
-
-    def test_rx_workflow(self):
-        rxtx_db = RxTxDB(self.driver)
-        assert rxtx_db._db is not None
-
-        rx_workflow_test(rxtx_db)
+        self.driver.reset(subs_id, ne_id, iface, kind)
+        rx = self.driver.get_data(subs_id, ne_id, iface, kind)
+        rx_validate(rx, 0)
 
 
 class TestWindow(unittest.TestCase):
@@ -366,6 +376,14 @@ class TestWindow(unittest.TestCase):
         self.assertRaises(ValueError, Window._next_reset, '')
         self.assertRaises(ValueError, Window._next_reset, '42')
 
+    def test_to_from_dict(self):
+        assert {'ts_window': 'month',
+                'ts_reset': next_month_first_day().timestamp()} == Window().to_dict()
+
+        win_dict = {'ts_window': '1d',
+                    'ts_reset': (datetime.today() + timedelta(days=1)).timestamp()}
+        assert win_dict == Window.from_dict(win_dict).to_dict()
+
 
 class TestRxTxWithWindow(unittest.TestCase):
 
@@ -376,8 +394,7 @@ class TestRxTxWithWindow(unittest.TestCase):
         assert rx.window is not None
         assert 'month' == rx.window.ts_window
         rx.set(1)
-        assert 1 == rx.total
-        assert 1 == rx.prev
+        assert 0 == rx.total()
 
     def test_reset_window_1d(self):
         rx = RxTx()
@@ -385,18 +402,15 @@ class TestRxTxWithWindow(unittest.TestCase):
         assert '1d' == rx.window.ts_window
         rx.set(1)
         assert False is rx.window.need_update()
-        assert 1 == rx.total
-        assert 1 == rx.prev
+        assert 0 == rx.total()
         rx.set(3)
         assert False is rx.window.need_update()
-        assert 3 == rx.total
-        assert 3 == rx.prev
+        assert 2 == rx.total()
         # let's jump to the future
         db.now = Mock(return_value=datetime.now() + timedelta(days=2))
         assert True is rx.window.need_update()
         rx.set(5)
-        assert 0 == rx.total
-        assert 5 == rx.prev
+        assert 0 == rx.total()
         tomorrow = (datetime.now() + timedelta(days=1)).date()
         assert tomorrow == rx.window.ts_reset.date()
 
@@ -407,12 +421,10 @@ class TestRxTxWithWindow(unittest.TestCase):
         rx.set_window(Window())
         assert 'month' == rx.window.ts_window
         rx.set(1)
-        assert 1 == rx.total
-        assert 1 == rx.prev
+        assert 0 == rx.total()
         # let's jump to the future
         db.now = Mock(return_value=datetime.now() + timedelta(days=32))
         assert True is rx.window.need_update()
         rx.set(50)
-        assert 0 == rx.total
-        assert 50 == rx.prev
+        assert 0 == rx.total()
         assert next_month_first_day().date() == rx.window.ts_reset.date()

@@ -11,7 +11,7 @@ def ts():
 
 producer = KafkaProducer(bootstrap_servers='localhost:9092')
 
-TOPIC = 'NB_TELEM_RESOURCES_REKYED_S'
+TOPIC = 'NE_TELEM_RESOURCES_REKYED_S'
 
 owners = ['user/01', 'user/02']
 

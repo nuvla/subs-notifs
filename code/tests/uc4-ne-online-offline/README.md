@@ -25,7 +25,7 @@ kafka-console-consumer --bootstrap-server localhost:9092 --from-beginning \
 
 ### Send telemetry and check results
 
-Eight telemetry messages are sent to `NB_TELEM_RESOURCES_REKYED_S` topic with
+Eight telemetry messages are sent to `NE_TELEM_RESOURCES_REKYED_S` topic with
 the following expected results in the `NOTIFICATION_S` topic.
 
 To check the results:
