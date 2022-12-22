@@ -24,6 +24,7 @@ class SubscriptionConfig(dict):
     methods for easier data access and predicates to checking states and
     internal conditions.
     """
+
     def __init__(self, *args, **kwargs):
         dict.__init__(self, *args, **kwargs)
 
@@ -40,13 +41,13 @@ class SubscriptionConfig(dict):
             return val in ['true', 'True']
         return val
 
-    def criteria_metric(self):
+    def criteria_metric(self) -> str:
         return self['criteria']['metric']
 
-    def criteria_kind(self):
+    def criteria_kind(self) -> str:
         return self['criteria']['kind']
 
-    def criteria_dev_name(self):
+    def criteria_dev_name(self) -> str:
         return self['criteria'].get('dev-name')
 
     def criteria_reset_interval(self):
@@ -86,9 +87,9 @@ class SubscriptionConfig(dict):
         return []
 
     def tags_match(self, tags: Union[List, None]) -> bool:
-        log.debug('tags_match: tags %s', tags)
         if tags:
-            return bool(set(self._tags_from_resource_filter()).intersection(set(tags)))
+            return bool(
+                set(self._tags_from_resource_filter()).intersection(set(tags)))
         return False
 
 
@@ -116,7 +117,8 @@ class LoggingDict(dict):
         dict.__init__(self, *args, **kwargs)
         if self._is_debug():
             self._log_caller()
-            log.debug('%s __init__: args: %s, kwargs: %s', self.name, args, kwargs)
+            log.debug('%s __init__: args: %s, kwargs: %s', self.name, args,
+                      kwargs)
         self.__lock = Lock()
 
     def __setitem__(self, key, value):

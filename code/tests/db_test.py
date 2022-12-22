@@ -15,8 +15,8 @@ elasticmock.fake_indices.FakeIndicesClient.create = es_index_create
 from elasticmock import elasticmock
 
 import nuvla.notifs.db as db
-from nuvla.notifs.db import RxTxValue, RxTx, RxTxDB, RxTxDriverES, RxTxDriverSqlite, \
-    Window, bytes_to_gb, gb_to_bytes, next_month_first_day, \
+from nuvla.notifs.db import RxTxValue, RxTx, RxTxDB, RxTxDriverES, Window, \
+    bytes_to_gb, gb_to_bytes, next_month_first_day, \
     DBInconsistentStateError
 
 db_now_orig = db.now
@@ -223,7 +223,6 @@ class TestRxTxDriverESDataMgmt(unittest.TestCase):
         assert 'rxtx' in data
         assert data.get('rxtx') is not None
         rxtx_updated = RxTxDriverES._rxtx_deserialize(data.get('rxtx'))
-        print(rxtx_updated)
         assert 1 == rxtx_updated.total()
 
 

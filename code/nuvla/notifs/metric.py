@@ -1,5 +1,16 @@
-from typing import Union
+"""
+Module for handling resource metrics.
 
+This module contains
+- Classes for storing and retrieving resource metrics specific to NuvlaEdge
+  resources.
+- Helper function and exception for handling KeyError exceptions in a consistent
+  way when a metric is not found in a collection of metrics.
+"""
+
+from typing import Union, Callable, Any
+
+from nuvla.notifs.resource import Resource
 from nuvla.notifs.log import get_logger
 
 
@@ -10,48 +21,44 @@ EX_MSG_TMPL_KEY_NOT_FOUND = '{} not found under {}'
 
 
 class MetricNotFound(Exception):
-    pass
+    """
+    Exception raised when a metric is not found in a collection of metrics.
+    """
+
+    def __init__(self, metric_name: str, parent_key: str):
+        """Initializes the MetricNotFound exception with the name of the metric
+        that was not found.
+
+        :param metric_name: The name of the metric that was not found.
+        :param parent_key: Parent key under which the metric was searched.
+        """
+        self.metric_name = metric_name
+        message = EX_MSG_TMPL_KEY_NOT_FOUND.format(metric_name, parent_key)
+        super().__init__(message)
 
 
-def key_error_ex_handler(func):
+def key_error_ex_handler(func) -> Callable[..., Any]:
+    """
+    Exception handler as decorator for catching KeyError when searching for
+    various metrics.
+    :param func: function or method to wrap
+    :return: wrapped function
+    """
+
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except KeyError as ex:
-            msg = EX_MSG_TMPL_KEY_NOT_FOUND.format(ex, args[1])
-            raise MetricNotFound(msg) from ex
+            raise MetricNotFound(str(ex), args[1]) from ex
     return wrapper
 
 
-class ResourceMetrics(dict):
-    def __init__(self, *args, **kwargs):
-        dict.__init__(self, *args, **kwargs)
-
-    def __getitem__(self, key):
-        """Try with keys in upper case to account for ksqlDB key transformation.
-        """
-        try:
-            return dict.__getitem__(self, key)
-        except KeyError as ex:
-            try:
-                return dict.__getitem__(self, key.upper())
-            except KeyError:
-                raise ex
-
-    def name(self):
-        return self['name']
-
-    def description(self):
-        return self['description']
-
-    def timestamp(self):
-        return self['timestamp']
-
-    def uuid(self):
-        return self['id'].split('/')[1]
-
-
-class NuvlaEdgeResourceMetrics(ResourceMetrics):
+class NuvlaEdgeMetrics(Resource):
+    """
+    Representation of the NuvlaEdge metrics. Provides helper methods for
+    accessing to and translating values of various metrics (e.g., load, ram,
+    cpu, network).
+    """
 
     RESOURCES_KEY = 'RESOURCES'
     RESOURCES_PREV_KEY = 'RESOURCES_PREV'

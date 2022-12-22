@@ -1,16 +1,16 @@
 import unittest
 
-from nuvla.notifs.metric import NuvlaEdgeResourceMetrics, MetricNotFound, \
+from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound, \
     EX_MSG_TMPL_KEY_NOT_FOUND
 
 
 class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
 
     def test_init(self):
-        assert 0 == len(NuvlaEdgeResourceMetrics({}))
+        assert 0 == len(NuvlaEdgeMetrics({}))
 
     def test_metric_not_found(self):
-        nerm = NuvlaEdgeResourceMetrics({'RESOURCES': {}, 'RESOURCES_PREV': {}})
+        nerm = NuvlaEdgeMetrics({'RESOURCES': {}, 'RESOURCES_PREV': {}})
 
         with self.assertRaises(MetricNotFound) as context_mgr:
             nerm._load_pct(nerm.RESOURCES_KEY)
@@ -28,7 +28,7 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         self.assertRaises(MetricNotFound, nerm.disk_pct_prev, 'foo')
 
     def test_load_pct(self):
-        nerm = NuvlaEdgeResourceMetrics({
+        nerm = NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}}})
         assert 100 == nerm._load_pct(nerm.RESOURCES_KEY)
@@ -37,7 +37,7 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         assert 50 == nerm.load_pct_prev()
 
     def test_ram_pct(self):
-        nerm = NuvlaEdgeResourceMetrics({
+        nerm = NuvlaEdgeMetrics({
             'RESOURCES': {'RAM': {'used': 1000, 'capacity': 1000, 'topic': 'ram'}},
             'RESOURCES_PREV': {'RAM': {'used': 500, 'capacity': 1000, 'topic': 'ram'}}})
         assert 100 == nerm._ram_pct(nerm.RESOURCES_KEY)
@@ -46,7 +46,7 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         assert 50 == nerm.ram_pct_prev()
 
     def test_disk_pct(self):
-        nerm = NuvlaEdgeResourceMetrics({
+        nerm = NuvlaEdgeMetrics({
             'RESOURCES': {'DISKS': [{'used': 10, 'capacity': 10, 'device': 'C:'}]},
             'RESOURCES_PREV': {'DISKS': [{'used': 5, 'capacity': 10, 'device': 'C:'}]}})
         assert None is nerm._disk_pct(nerm.RESOURCES_KEY, 'A:')
@@ -57,20 +57,20 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         assert 50 == nerm.disk_pct_prev('C:')
 
     def test_default_gw_name(self):
-        nerm = NuvlaEdgeResourceMetrics({'NETWORK': None})
+        nerm = NuvlaEdgeMetrics({'NETWORK': None})
         assert None is nerm.default_gw_name()
 
-        nerm = NuvlaEdgeResourceMetrics({'NETWORK': {}})
+        nerm = NuvlaEdgeMetrics({'NETWORK': {}})
         assert None is nerm.default_gw_name()
 
-        nerm = NuvlaEdgeResourceMetrics({'NETWORK': {'default-gw': None}})
+        nerm = NuvlaEdgeMetrics({'NETWORK': {'default-gw': None}})
         assert None is nerm.default_gw_name()
 
-        nerm = NuvlaEdgeResourceMetrics({'NETWORK': {'default-gw': 'foo'}})
+        nerm = NuvlaEdgeMetrics({'NETWORK': {'default-gw': 'foo'}})
         assert 'foo' == nerm.default_gw_name()
 
     def test_default_gw(self):
-        nerm = NuvlaEdgeResourceMetrics({
+        nerm = NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'},
                           'NET-STATS': [
                               {'interface': 'lo',
@@ -78,8 +78,8 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
                                'bytes-received': 2}]}})
         assert {} == nerm.default_gw_data()
 
-        nerm = NuvlaEdgeResourceMetrics({
-            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'foo'},
+        nerm = NuvlaEdgeMetrics({
+            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'foo'},
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'},
                           'NET-STATS': [
                               {'interface': 'lo',
@@ -90,8 +90,8 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         gw = {'interface': 'eth0',
               'bytes-transmitted': 1,
               'bytes-received': 2}
-        nerm = NuvlaEdgeResourceMetrics({
-            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'foo'},
+        nerm = NuvlaEdgeMetrics({
+            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'foo'},
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'},
                           'NET-STATS': [
                               gw,
@@ -104,8 +104,8 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         gw = {'interface': gw_name,
               'bytes-transmitted': 1,
               'bytes-received': 2}
-        nerm = NuvlaEdgeResourceMetrics({
-            'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: gw_name},
+        nerm = NuvlaEdgeMetrics({
+            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: gw_name},
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               gw,

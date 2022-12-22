@@ -15,8 +15,9 @@ from nuvla.notifs.subscription import SelfUpdatingDict, \
     SubscriptionConfig, SUBS_CONF_TOPIC
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
-from nuvla.notifs.matcher import NuvlaEdgeSubsConfMatcher
-from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
+from nuvla.notifs.matcher import NuvlaEdgeSubsConfMatcher, \
+    TaggedResourceNetSubsConfigMatcher
+from nuvla.notifs.metric import NuvlaEdgeMetrics
 
 
 log = get_logger('main')
@@ -50,8 +51,10 @@ def ne_telem_process(msg, subs_confs: SelfUpdatingDict, net_db: RxTxDB,
                      notif_publisher: NotificationPublisher):
     log.info('Got message: %s', msg.value)
     msg.value['id'] = msg.key
-    nerm = NuvlaEdgeResourceMetrics(msg.value)
-    net_db.update(nerm)
+    nerm = NuvlaEdgeMetrics(msg.value)
+    subs_confs_ids = TaggedResourceNetSubsConfigMatcher() \
+        .resource_subscriptions_ids(nerm, subs_confs.values())
+    net_db.update(nerm, subs_confs_ids)
     log.info('net db: %s', net_db)
     if subs_confs.get(RESOURCE_KIND_NE):
         nem = NuvlaEdgeSubsConfMatcher(nerm, net_db)

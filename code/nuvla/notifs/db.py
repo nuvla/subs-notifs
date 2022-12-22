@@ -4,8 +4,8 @@ Set of classes implementing persistence layer and corresponding database drivers
 Schema to hold network consumption accumulating record.
 
 {
-"subs-id": "subscription-config/1-2-3-4-5",
-"ne-id": "nuvlabox/1-2-3-4-5",
+"subs_id": "subscription-config/1-2-3-4-5",
+"ne_id": "nuvlaedge/1-2-3-4-5",
 "iface": "eth0",
 "rxtx":
   {
@@ -28,12 +28,12 @@ Schema to hold network consumption accumulating record.
 
     # Shows if the value was already above the threshold to not
     # re-trigger the notifications.
-    "above-thld": False
+    "above_thld": False
   }
 }
 
-rxtx->vals and rxtx->above-thld are reset each time at the end of the user
-defined window. rxtx->vals gets reset to [[0, 0]] and rxtx->above-thld gets
+rxtx->value and rxtx->above_thld are reset each time at the end of the user
+defined window. rxtx->vals gets reset to [[0, 0]] and rxtx->above_thld gets
 reset to False.
 
 To compute current Rx or Tx the following reduction is used
@@ -42,21 +42,19 @@ sum(map(lambda x: x[1] - x[0], rxtx->vals))
 
 Example:
 
-sum(map(lambda x: x[1] - x[0], [[1, 2], [1, 4]])) => 4
+sum(map(lambda x: x[1] - x[0], [[1, 2], [0, 4]])) => 5
 """
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Union
+from typing import Union, List
 import json
 import math
-import pickle
 import re
-import sqlite3
 
 import elasticsearch
 
-from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
+from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.log import get_logger, stdout_handler
 
 log = get_logger('db')
@@ -270,7 +268,7 @@ class RxTx:
         return rxtx
 
     def __repr__(self):
-        return f'{self.__class__.__name__}[total={self.value}, ' \
+        return f'{self.__class__.__name__}[value={self.value}, ' \
                f'above_thld={self.above_thld}, ' \
                f'window={self.window}]'
 
@@ -512,85 +510,6 @@ class RxTxDriverES:
                              self._rxtx_serialize(rxtx))
 
 
-class RxTxDriverSqlite:
-    """
-    Sqlite DB driver for persisting Rx/Tx.
-    """
-
-    TABLE_NAME = 'rxtx'
-
-    INSERT = f"INSERT INTO {TABLE_NAME} VALUES (?, ?, ?, ?)"
-    UPDATE = f"UPDATE {TABLE_NAME} SET rxtx=? WHERE ne_id=? AND iface=? AND kind=?"
-    SELECT = f"SELECT rxtx FROM {TABLE_NAME} WHERE ne_id=? AND iface=? AND kind=?"
-
-    def __init__(self, path: str):
-        self.con = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES)
-        self.cur = None
-
-    def set(self, ne_id, kind, interface=None, value=None):
-        rxtx = self.get_data(ne_id, interface, kind)
-        if rxtx:
-            rxtx.set(value)
-            rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
-            self.cur.execute(self.UPDATE, (rxtx_blob, ne_id, interface, kind))
-            self.con.commit()
-        else:
-            # Initial data.
-            rxtx = RxTx()
-            rxtx.set(value)
-            rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
-            self.cur.execute(self.INSERT, (ne_id, interface, kind, rxtx_blob))
-            self.con.commit()
-
-    def get_data(self, ne_id, iface, kind) -> Union[None, RxTx]:
-        res = self.cur.execute(self.SELECT, (ne_id, iface, kind))
-        rxtx_res = res.fetchone()
-        if rxtx_res:
-            rxtx_blob = rxtx_res[0]
-            return pickle.loads(rxtx_blob)
-        return None
-
-    def reset(self, ne_id, iface, kind):
-        rxtx = self.get_data(ne_id, iface, kind)
-        if rxtx:
-            rxtx.reset()
-            self._update_rxtx(ne_id, iface, kind, rxtx)
-
-    def set_above_thld(self, ne_id, iface, kind, subs_id):
-        rxtx = self.get_data(ne_id, iface, kind)
-        if rxtx:
-            rxtx.set_above_thld(subs_id)
-            self._update_rxtx(ne_id, iface, kind, rxtx)
-
-    def reset_above_thld(self, ne_id, iface, kind, subs_id):
-        rxtx = self.get_data(ne_id, iface, kind)
-        if rxtx:
-            rxtx.reset_above_thld(subs_id)
-            self._update_rxtx(ne_id, iface, kind, rxtx)
-
-    def _update_rxtx(self, ne_id, iface, kind, rxtx: RxTx):
-        rxtx_blob = pickle.dumps(rxtx, pickle.HIGHEST_PROTOCOL)
-        self.cur.execute(f"UPDATE {self.TABLE_NAME} SET rxtx=? WHERE ne_id=? AND iface=? AND kind=?",
-                         (rxtx_blob, ne_id, iface, kind))
-        self.con.commit()
-
-    def close(self):
-        self.cur.close()
-        self.cur = None
-
-    def connect(self):
-        self.cur = self.con.cursor()
-        self._create_table()
-
-    def _create_table(self):
-        self.cur.execute(f'''CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
-        ne_id TEXT NOT NULL,
-        iface TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        rxtx BLOB NOT NULL
-        )''')
-
-
 class RxTxDriverInMem:
     """
     Driver for in-memory persistence of Rx/Tx.
@@ -631,10 +550,10 @@ class RxTxDriverInMem:
                         val = RxTx()
                         val.set(value)
                         self._db[subs_id][ne_id][interface][kind] = val
-            else:
-                val = RxTx()
-                val.set(value)
-                self._db[subs_id][ne_id][interface] = {kind: val}
+                else:
+                    val = RxTx()
+                    val.set(value)
+                    self._db[subs_id][ne_id][interface] = {kind: val}
         else:
             val = RxTx()
             val.set(value)
@@ -743,8 +662,8 @@ class RxTxDB:
         if rx:
             return bytes_to_gb(rx)
 
-    def set_above_thld(self, ne_id, iface, kind):
-        self._db.set_above_thld(ne_id, iface, kind, kind)
+    def set_above_thld(self, subs_id, ne_id, iface, kind):
+        self._db.set_above_thld(subs_id, ne_id, iface, kind)
 
     def get_above_thld(self, subs_id, ne_id, iface, kind) -> bool:
         data = self.get_data(subs_id, ne_id, iface, kind)
@@ -754,13 +673,26 @@ class RxTxDB:
     def reset_above_thld(self, subs_id, ne_id, iface, kind):
         self._db.reset_above_thld(subs_id, ne_id, iface, kind)
 
-    def update(self, metrics: NuvlaEdgeResourceMetrics):
+    def update(self, metrics: NuvlaEdgeMetrics, subs_ids: List[str]):
+        """
+        Updates Rx/Tx metrics of the corresponding NuvlaEdge when it has an
+        associated subscription. The underlying implementation works in UPSERT
+        mode.
+
+        The caller of the method must ensure that each subscription from the
+        `subs_ids` list is actually subscribed to the NuvlaEdge from which the
+        `metrics` are coming.
+
+        :param metrics: telemetry of a NuvlaEdge
+        :param subs_ids: list of IDs of subscriptions to the NuvlaEdge
+        """
         ne_id = metrics.get('id')
         if ne_id:
-            for v in metrics.net_rx_all():
-                self.set_rx(ne_id, v)
-            for v in metrics.net_tx_all():
-                self.set_tx(ne_id, v)
+            for subs_id in subs_ids:
+                for v in metrics.net_rx_all():
+                    self.set_rx(subs_id, ne_id, v)
+                for v in metrics.net_tx_all():
+                    self.set_tx(subs_id,ne_id, v)
 
     def __len__(self):
         return len(self._db)
