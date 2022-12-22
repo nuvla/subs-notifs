@@ -1,6 +1,6 @@
 import unittest
 
-from db_test import TestRxTxDriverESMockedBase
+from test_db import TestRxTxDriverESMockedBase
 from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes, \
     RxTxDriverInMem
 from nuvla.notifs.matcher import ResourceSubsConfigMatcher, \
