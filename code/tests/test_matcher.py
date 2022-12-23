@@ -1378,7 +1378,6 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
 
         # The network metric matched the threshold condition.
         res = nescm.match_all([sc_rx_wlan1])
-        print(res)
         assert 1 == len(res)
         assert res[0]['subs_description'] == 'NE network Rx'
         assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'

@@ -35,13 +35,13 @@ class TestSubscriptionConfig(unittest.TestCase):
 
     def test_tags_from_resource_filter(self):
         sc = SubscriptionConfig({'resource-filter': "tags='foo'"})
-        assert ['foo'] == list(sc._tags_from_resource_filter())
+        assert ['foo'] == sc._tags_from_resource_filter()
 
         sc = SubscriptionConfig({'resource-filter': ''})
-        assert [] == list(sc._tags_from_resource_filter())
+        assert 0 == len(sc._tags_from_resource_filter())
 
         sc = SubscriptionConfig({})
-        assert [] == list(sc._tags_from_resource_filter())
+        assert 0 == len(sc._tags_from_resource_filter())
 
     def test_tags_match(self):
         sc = SubscriptionConfig({})

@@ -45,12 +45,13 @@ Example:
 sum(map(lambda x: x[1] - x[0], [[1, 2], [0, 4]])) => 5
 """
 
-from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
-from typing import Union, List
 import json
 import math
 import re
+from typing import Union, List
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
+from dateutil import relativedelta
 
 import elasticsearch
 
@@ -78,13 +79,31 @@ def gb_to_bytes(value_gb: float) -> int:
     return int(value_gb * math.pow(1024, 3))
 
 
-def now() -> datetime:
-    return datetime.now()
+def now(tz=None) -> datetime:
+    return datetime.now(tz)
 
 
 def next_month_first_day() -> datetime:
     return (now().replace(day=1) + timedelta(days=32)) \
-        .replace(day=1, minute=0, second=0, microsecond=0)
+        .replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _next_month_same_day(date: datetime) -> datetime:
+    """
+    Given `date`, returns same day of the next month relative to the `date`.
+    :param date: datetime
+    """
+    return date + relativedelta.relativedelta(months=1)
+
+
+def next_month_this_day(day: int) -> datetime:
+    """
+    Given `day` of month, returns same day of the next month.
+    :param day: int (range [1, 31])
+    """
+    assert 1 <= day <= 31
+    dt = now(tz=timezone.utc)
+    return _next_month_same_day(datetime(dt.year, dt.month, day))
 
 
 class DBInconsistentStateError(Exception):
@@ -98,12 +117,18 @@ class Window:
 
     RE_VALID_TIME_WINDOW = re.compile('[0-9].*d$')
 
-    def __init__(self, ts_window='month'):
+    def __init__(self, ts_window='month', month_day=1):
         """
         :param ts_window: possible values: {month, Nd}; with 'month' working on
                           calendar months level, and Nd is a number of days to
                           roll over on.
+        :param month_day: int (range [1, 31]), day of the month for reset.
         """
+        if ts_window == 'month':
+            assert 1 <= month_day <= 31
+            self.month_day = month_day
+        else:
+            self.month_day = None
         self._ts_window: str = None
         self.ts_reset: datetime = None
         self.ts_window: str = ts_window
@@ -113,16 +138,16 @@ class Window:
         return bool(re.match(cls.RE_VALID_TIME_WINDOW, window))
 
     @classmethod
-    def _next_reset(cls, window: str) -> datetime:
+    def _next_reset(cls, window: str, month_day: int = 1) -> datetime:
         if window == 'month':
-            return next_month_first_day()
+            return next_month_this_day(month_day)
         if cls._valid_time_window(window):
             days = int(window.replace('d', ''))
             return datetime.now() + timedelta(days=days)
         raise ValueError(f'Invalid window: {window}')
 
     def _update_next_reset(self):
-        self.ts_reset = self._next_reset(self.ts_window)
+        self.ts_reset = self._next_reset(self.ts_window, self.month_day)
 
     @property
     def ts_window(self) -> str:
@@ -130,7 +155,7 @@ class Window:
 
     @ts_window.setter
     def ts_window(self, window: str):
-        self.ts_reset = self._next_reset(window)
+        self.ts_reset = self._next_reset(window, self.month_day)
         self._ts_window = window
 
     def need_update(self) -> bool:
@@ -141,7 +166,8 @@ class Window:
 
     def to_dict(self):
         return {'ts_window': self.ts_window,
-                'ts_reset': self.ts_reset.timestamp()}
+                'ts_reset': self.ts_reset.timestamp(),
+                'month_day': self.month_day}
 
     @staticmethod
     def from_dict(d: dict):
@@ -150,6 +176,7 @@ class Window:
         w = Window()
         w.ts_window = d['ts_window']
         w.ts_reset = datetime.fromtimestamp(d['ts_reset'])
+        w.month_day = d['month_day']
         return w
 
     def to_json(self):
@@ -227,9 +254,9 @@ class RxTx:
         :param current: current value of the counter
         """
 
-        self.value.set(current)
-
         self._apply_window()
+
+        self.value.set(current)
 
     def total(self) -> int:
         return self.value.total()
@@ -597,9 +624,9 @@ class RxTxDB:
     #
     # Driver level methods.
 
-    def set(self, subs_id, ne_id, kind, interface=None, value=None):
+    def set(self, subs_id, ne_id, kind, iface, value):
         if self._db is not None:
-            self._db.set(subs_id, ne_id, kind, interface, value)
+            self._db.set(subs_id, ne_id, kind, iface, value)
 
     def reset(self, subs_id, ne_id, iface, kind):
         if self._db is not None:
@@ -620,7 +647,7 @@ class RxTxDB:
         :param data: {interface: eth0, value: 0}
         """
         if data:
-            self.set(subs_id, ne_id, 'rx', **data)
+            self.set(subs_id, ne_id, 'rx', data['interface'], data['value'])
 
     def set_tx(self, subs_id, ne_id: str, data: dict):
         """
@@ -629,7 +656,7 @@ class RxTxDB:
         :param data: {interface: eth0, value: 0}
         """
         if data:
-            self.set(subs_id, ne_id, 'tx', **data)
+            self.set(subs_id, ne_id, 'tx', data['interface'], data['value'])
 
     def get(self, subs_id, ne_id, iface, kind) -> Union[None, int]:
         data = self.get_data(subs_id, ne_id, iface, kind)

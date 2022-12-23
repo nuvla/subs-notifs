@@ -16,10 +16,29 @@ from elasticmock import elasticmock
 
 import nuvla.notifs.db as db
 from nuvla.notifs.db import RxTxValue, RxTx, RxTxDB, RxTxDriverES, Window, \
-    bytes_to_gb, gb_to_bytes, next_month_first_day, \
-    DBInconsistentStateError
+    bytes_to_gb, gb_to_bytes, next_month_first_day, _next_month_same_day, \
+    next_month_this_day, DBInconsistentStateError
 
 db_now_orig = db.now
+
+
+class TestNextMonthConversion(unittest.TestCase):
+
+    def test_month_same_day(self):
+
+        assert datetime.fromisoformat('2023-03-15T00:00:00') == \
+               _next_month_same_day(
+                   datetime.fromisoformat('2023-02-15T00:00:00'))
+
+        for i in range(28, 32):
+            assert datetime.fromisoformat('2023-02-28T00:00:00') == \
+                   _next_month_same_day(
+                       datetime.fromisoformat(f'2023-01-{i}T00:00:00'))
+
+    def test_month_this_day(self):
+        res = next_month_this_day(28)
+        assert 28 == res.day
+        assert (datetime.today().month + 1) % 12 == res.month
 
 
 class TestDBUtils(unittest.TestCase):
@@ -160,8 +179,18 @@ class TestRxTx(unittest.TestCase):
         assert {'value': [],
                 'above_thld': False,
                 'window': {'ts_window': 'month',
-                           'ts_reset': next_month_first_day().timestamp()}} \
-               == rx.to_dict()
+                           'month_day': 1,
+                           'ts_reset': next_month_this_day(1).timestamp()}} == \
+               rx.to_dict()
+
+        d = 25
+        rx.set_window(Window('month', month_day=d))
+        assert {'value': [],
+                'above_thld': False,
+                'window': {'ts_window': 'month',
+                           'month_day': d,
+                           'ts_reset': next_month_this_day(d).timestamp()}} == \
+               rx.to_dict()
 
 
 def rx_workflow_test(rxtx: RxTxDB):
@@ -272,7 +301,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
         kind = 'rx'
         value = 1
 
-        self.driver.set(subs_id, ne_id, kind, interface=iface, value=value)
+        self.driver.set(subs_id, ne_id, kind, iface, value)
 
         assert 1 == len(self.driver._index_all_docs())
 
@@ -296,7 +325,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
         kind = 'rx'
         value = 1
 
-        self.driver.set(subs_id, ne_id, kind, interface=iface, value=value)
+        self.driver.set(subs_id, ne_id, kind, iface, value)
         assert 1 == len(self.driver._index_all_docs())
         rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None
@@ -321,13 +350,13 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
         iface = 'eth0'
         kind = 'rx'
 
-        self.driver.set(subs_id, ne_id, kind, interface=iface, value=1)
+        self.driver.set(subs_id, ne_id, kind, iface, 1)
         assert 1 == len(self.driver._index_all_docs())
 
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
         rx_validate(rx, 0)
 
-        self.driver.set(subs_id, ne_id, kind, interface=iface, value=2)
+        self.driver.set(subs_id, ne_id, kind, iface, 2)
         assert 1 == len(self.driver._index_all_docs())
 
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
@@ -337,7 +366,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
         rx_validate(rx, 0)
 
-        self.driver.set(subs_id, ne_id, kind, interface=iface, value=10)
+        self.driver.set(subs_id, ne_id, kind, iface, 10)
         assert 1 == len(self.driver._index_all_docs())
 
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
@@ -351,13 +380,30 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
 class TestWindow(unittest.TestCase):
 
     def test_init(self):
+
         wrtx = Window()
         assert 'month' == wrtx.ts_window
+        assert 1 == wrtx.month_day
+
+        wrtx = Window('month', 1)
+        assert 'month' == wrtx.ts_window
+        assert 1 == wrtx.month_day
+
+        wrtx = Window('month', 31)
+        assert 'month' == wrtx.ts_window
+        assert 31 == wrtx.month_day
+
+        self.assertRaises(AssertionError, Window, 'month', 0)
+        self.assertRaises(AssertionError, Window, 'month', 32)
+
         wrtx = Window('1d')
         assert '1d' == wrtx.ts_window
+        assert None is wrtx.month_day
 
     def test_valid_window(self):
+
         wrtx = Window()
+
         assert True is wrtx._valid_time_window('1d')
         assert True is wrtx._valid_time_window('123d')
         assert False is wrtx._valid_time_window('123s')
@@ -377,9 +423,12 @@ class TestWindow(unittest.TestCase):
 
     def test_to_from_dict(self):
         assert {'ts_window': 'month',
-                'ts_reset': next_month_first_day().timestamp()} == Window().to_dict()
+                'month_day': 1,
+                'ts_reset': next_month_this_day(1).timestamp()} == \
+               Window().to_dict()
 
         win_dict = {'ts_window': '1d',
+                    'month_day': None,
                     'ts_reset': (datetime.today() + timedelta(days=1)).timestamp()}
         assert win_dict == Window.from_dict(win_dict).to_dict()
 
@@ -419,6 +468,7 @@ class TestRxTxWithWindow(unittest.TestCase):
         rx = RxTx()
         rx.set_window(Window())
         assert 'month' == rx.window.ts_window
+        assert 1 == rx.window.month_day
         rx.set(1)
         assert 0 == rx.total()
         # let's jump to the future
