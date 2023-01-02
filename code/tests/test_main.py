@@ -1,7 +1,14 @@
 import os
 import unittest
 
-from nuvla.notifs.main import es_hosts, ES_HOSTS
+from elasticmock import elasticmock
+
+from fake_updater import get_updater
+from nuvla.notifs.main import es_hosts, ES_HOSTS, populate_ne_net_db
+from nuvla.notifs.metric import NuvlaEdgeMetrics
+from nuvla.notifs.subscription import SelfUpdatingDict, SubscriptionCfg, \
+    RESOURCE_KIND_NE
+from nuvla.notifs.db import RxTxDB
 
 
 class TestEsHosts(unittest.TestCase):
@@ -16,3 +23,54 @@ class TestEsHosts(unittest.TestCase):
         os.environ['ES_HOSTS'] = 'es1:9201,es2:9202'
         assert [{'host': 'es1', 'port': 9201},
                 {'host': 'es2', 'port': 9202}] == es_hosts()
+
+
+class TestPopulateNetDB(unittest.TestCase):
+
+    @elasticmock
+    def test_empty(self):
+        net_db = RxTxDB()
+        assert net_db.is_connected()
+        populate_ne_net_db(net_db, NuvlaEdgeMetrics({}), [])
+        assert 0 == len(net_db)
+
+    @elasticmock
+    def test_populated(self):
+        net_db = RxTxDB()
+        nerm = NuvlaEdgeMetrics({
+            'id': 'ne/1',
+            'TAGS': ['nuvlabox=True'],
+            'ACL': {'owners': ['group/nuvla-admin'],
+                    'view-data': [
+                        'nuvlabox/1c56dc02-0c16-4423-a4b1-9265d855621d',
+                        'user/01',
+                        'me',
+                        'user/03']},
+            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
+                          'net-stats': [
+                              {'interface': 'eth0',
+                               'bytes-transmitted': 1,
+                               'bytes-received': 1},
+                              {'interface': 'lo',
+                               'bytes-transmitted': 63742086112,
+                               'bytes-received': 63742086112
+                               }]},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
+        subs_cfgs_data = [('1-2-3-4', {'resource-kind': RESOURCE_KIND_NE,
+                                       'criteria': {'metric': 'network-rx'},
+                                       'id': '1-2-3-4',
+                                       'resource-filter': "tags='nuvlabox=True'",
+                                       'acl': {'owners': ['me']}}),
+                          ('a-b-c-d', {'resource-kind': RESOURCE_KIND_NE,
+                                       'criteria': {'metric': 'network-tx'},
+                                       'id': 'a-b-c-d',
+                                       'resource-filter': "tags='nuvlabox=True'",
+                                       'acl': {'owners': ['me']}})]
+        sud = SelfUpdatingDict('test', get_updater(subs_cfgs_data),
+                               SubscriptionCfg)
+        sud.wait_key_set(RESOURCE_KIND_NE)
+        sud.wait_not_empty()
+        populate_ne_net_db(net_db, nerm, sud[RESOURCE_KIND_NE].values())
+        assert 8 == len(net_db)

@@ -8,27 +8,25 @@ import signal
 import time
 import threading
 import traceback
+from typing import List
 
 from nuvla.notifs.db import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SelfUpdatingDict, \
-    SubscriptionConfig, SUBS_CONF_TOPIC
+from nuvla.notifs.subscription import SelfUpdatingSubsCfgs, \
+    SubscriptionCfg, SUBS_CONF_TOPIC, RESOURCE_KIND_NE, \
+    RESOURCE_KIND_DATARECORD, RESOURCE_KIND_EVENT
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
-from nuvla.notifs.matcher import NuvlaEdgeSubsConfMatcher, \
-    TaggedResourceNetSubsConfigMatcher
+from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher, \
+    TaggedResourceNetworkSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
-
 
 log = get_logger('main')
 
 NE_TELEM_TOPIC = os.environ.get('NE_TELEM_TOPIC', 'NUVLAEDGE_STATUS_REKYED_S')
 NE_TELEM_GROUP_ID = NE_TELEM_TOPIC
 NOTIF_TOPIC = 'NOTIFICATIONS_S'
-RESOURCE_KIND_NE = 'nuvlabox'
-RESOURCE_KIND_EVENT = 'event'
-RESOURCE_KIND_DATARECORD = 'data-record'
-DB_FILENAME='/opt/subs-notifs/subs-notifs.db'
+DB_FILENAME = '/opt/subs-notifs/subs-notifs.db'
 ES_HOSTS = [{'host': 'es', 'port': 9200}]
 
 
@@ -47,42 +45,57 @@ def es_hosts():
     return ES_HOSTS
 
 
-def ne_telem_process(msg, subs_confs: SelfUpdatingDict, net_db: RxTxDB,
-                     notif_publisher: NotificationPublisher):
-    log.info('Got message: %s', msg.value)
-    msg.value['id'] = msg.key
-    nerm = NuvlaEdgeMetrics(msg.value)
-    subs_confs_ids = TaggedResourceNetSubsConfigMatcher() \
-        .resource_subscriptions_ids(nerm, subs_confs.values())
-    net_db.update(nerm, subs_confs_ids)
-    log.info('net db: %s', net_db)
-    if subs_confs.get(RESOURCE_KIND_NE):
-        nem = NuvlaEdgeSubsConfMatcher(nerm, net_db)
-        notifs = nem.match_all(subs_confs[RESOURCE_KIND_NE].values())
+def populate_ne_net_db(net_db: RxTxDB, ne_metrics: NuvlaEdgeMetrics,
+                       subs_cfgs: List[SubscriptionCfg]):
+    """
+    Populate network RxTx database with the network related metrics coming with
+    NuvlaEdge telemetry.
+
+    :param ne_metrics: NuvlaEdge telemetry metrics
+    :param net_db: network DB
+    :param subs_cfgs: NuvlaEdge subscription notification configurations
+    """
+    subs_cfgs_matched = TaggedResourceNetworkSubsCfgMatcher() \
+        .resource_subscriptions(ne_metrics, subs_cfgs)
+    net_db.update(ne_metrics, subs_cfgs_matched)
+
+
+def ne_telem_process(metrics: dict, subs_cfgs: List[SubscriptionCfg],
+                     net_db: RxTxDB, notif_publisher: NotificationPublisher):
+    log.info('Got metrics: %s', metrics)
+
+    nerm = NuvlaEdgeMetrics(metrics)
+
+    populate_ne_net_db(net_db, nerm, subs_cfgs)
+
+    if subs_cfgs.get(RESOURCE_KIND_NE):
+        notifs = NuvlaEdgeSubsCfgMatcher(nerm, net_db).match_all(subs_cfgs)
         log.info('To notify: %s', notifs)
         notif_publisher.publish_list(notifs, NOTIF_TOPIC)
     else:
-        log.warning('No %s subscriptions. Dropped: %s', RESOURCE_KIND_NE, msg)
+        log.warning('No %s subscriptions. Dropped: %s', RESOURCE_KIND_NE,
+                    metrics)
 
 
-def wait_sc_populated(subs_confs: SelfUpdatingDict, resource_kind: str, sleep=5, timeout=None):
+def wait_sc_populated(subs_cfgs: SelfUpdatingSubsCfgs, resource_kind: str,
+                      sleep=5, timeout=None):
     ts_end = time.time() + timeout if timeout else None
-    while not subs_confs.get(resource_kind):
+    while not subs_cfgs.get(resource_kind):
         if ts_end and time.time() >= ts_end:
-            log.warning('Stopped waiting %s after %s sec', resource_kind, timeout)
+            log.warning('Stopped waiting %s after %s sec', resource_kind,
+                        timeout)
             return
         log.debug('waiting for %s in subscription config: %s', resource_kind,
-                  list(subs_confs.keys()))
+                  list(subs_cfgs.keys()))
         time.sleep(sleep)
 
 
-def subs_notif_nuvla_edge_telemetry(subs_confs: SelfUpdatingDict):
-
+def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
     db_driver = RxTxDriverES(hosts=es_hosts())
     db_driver.connect()
     net_db = RxTxDB(db_driver)
 
-    wait_sc_populated(subs_confs, RESOURCE_KIND_NE, timeout=60)
+    wait_sc_populated(subs_cfgs, RESOURCE_KIND_NE, timeout=60)
 
     notif_publisher = NotificationPublisher()
 
@@ -93,37 +106,39 @@ def subs_notif_nuvla_edge_telemetry(subs_confs: SelfUpdatingDict):
                               client_id=NE_TELEM_GROUP_ID + '-1',
                               auto_offset_reset='latest'):
         try:
-            ne_telem_process(msg, subs_confs, net_db, notif_publisher)
+            msg.value['id'] = msg.key
+            ne_telem_process(msg.value,
+                             list(subs_cfgs.get(RESOURCE_KIND_NE).values()),
+                             net_db, notif_publisher)
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
-            log.error(f'Failed processing {msg.key} with: {ex}')
+            log.error('Failed processing %s with: %s', msg.key, ex)
 
 
-def subs_notif_data_record(subs_confs: SelfUpdatingDict):
-    wait_sc_populated(subs_confs, RESOURCE_KIND_DATARECORD, timeout=60)
+def subs_notif_data_record(subs_cfgs: SelfUpdatingSubsCfgs):
+    wait_sc_populated(subs_cfgs, RESOURCE_KIND_DATARECORD, timeout=60)
     log.info(f'Starting {RESOURCE_KIND_DATARECORD} processing...')
 
 
-def subs_notif_event(subs_confs: SelfUpdatingDict):
-    wait_sc_populated(subs_confs, RESOURCE_KIND_EVENT, timeout=60)
+def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
+    wait_sc_populated(subs_cfgs, RESOURCE_KIND_EVENT, timeout=60)
     log.info(f'Starting {RESOURCE_KIND_EVENT} processing...')
 
 
 def main():
     def print_sub_conf(signum, trace):
-        log.info(f'Subscription configs:\n{pformat(subs_confs)}')
+        log.info(f'Subscription configs:\n{pformat(dyn_subs_cfgs)}')
 
     signal.signal(signal.SIGUSR1, print_sub_conf)
 
-    subs_confs = SelfUpdatingDict('subscription-config',
-                                 KafkaUpdater(SUBS_CONF_TOPIC),
-                                 SubscriptionConfig)
+    dyn_subs_cfgs = SelfUpdatingSubsCfgs('subscription-config',
+                                         KafkaUpdater(SUBS_CONF_TOPIC))
 
     t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry,
-                          args=(subs_confs,), daemon=True)
-    t2 = threading.Thread(target=subs_notif_data_record, args=(subs_confs,),
+                          args=(dyn_subs_cfgs,), daemon=True)
+    t2 = threading.Thread(target=subs_notif_data_record, args=(dyn_subs_cfgs,),
                           daemon=True)
-    t3 = threading.Thread(target=subs_notif_event, args=(subs_confs,),
+    t3 = threading.Thread(target=subs_notif_event, args=(dyn_subs_cfgs,),
                           daemon=True)
     t1.start()
     t2.start()

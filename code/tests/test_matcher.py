@@ -1,38 +1,37 @@
 import unittest
 
 from test_db import TestRxTxDriverESMockedBase
-from nuvla.notifs.db import RxTxDB, RxTx, bytes_to_gb, gb_to_bytes, \
-    RxTxDriverInMem
-from nuvla.notifs.matcher import ResourceSubsConfigMatcher, \
-    NuvlaEdgeSubsConfMatcher, TaggedResourceSubsConfigMatcher, \
-    TaggedResourceNetSubsConfigMatcher
+from nuvla.notifs.db import RxTxDB, bytes_to_gb, gb_to_bytes
+from nuvla.notifs.schema.rxtx import RxTx
+from nuvla.notifs.matcher import ResourceSubsCfgMatcher, \
+    NuvlaEdgeSubsCfgMatcher, TaggedResourceSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.resource import Resource
-from nuvla.notifs.subscription import SubscriptionConfig
+from nuvla.notifs.subscription import SubscriptionCfg
 
 
 class TestResourceSubsConfigMatcher(unittest.TestCase):
 
     def test_init(self):
-        rscm = ResourceSubsConfigMatcher()
+        rscm = ResourceSubsCfgMatcher()
         assert False is rscm.resource_subscribed(Resource({}),
-                                                 SubscriptionConfig({}))
+                                                 SubscriptionCfg({}))
 
     def test_resource_subscribed(self):
         r = Resource({'acl': {'owners': ['me']},
                       'foo': ['bar']})
 
-        scm = ResourceSubsConfigMatcher()
+        scm = ResourceSubsCfgMatcher()
 
-        sc = SubscriptionConfig({'enabled': True})
+        sc = SubscriptionCfg({'enabled': True})
         assert False is scm.resource_subscribed(r, sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'enabled': False,
             'acl': {'owners': ['me']}})
         assert False is scm.resource_subscribed(r, sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'enabled': True,
             'acl': {'owners': ['me']}})
         assert True is scm.resource_subscribed(r, sc)
@@ -40,48 +39,48 @@ class TestResourceSubsConfigMatcher(unittest.TestCase):
     def test_resource_subscription(self):
         r = Resource()
         assert [] == \
-               list(ResourceSubsConfigMatcher()
+               list(ResourceSubsCfgMatcher()
                     .resource_subscriptions(r,
-                                            [SubscriptionConfig({}),
-                                             SubscriptionConfig(
+                                            [SubscriptionCfg({}),
+                                             SubscriptionCfg(
                                                  {'enabled': True}),
-                                             SubscriptionConfig({
+                                             SubscriptionCfg({
                                                  'enabled': True,
                                                  'acl': {'owners': ['me']}}),
-                                             SubscriptionConfig({
+                                             SubscriptionCfg({
                                                  'enabled': True,
                                                  'resource-filter': "tags='foo'",
                                                  'acl': {'owners': ['me']}})]))
 
         r = Resource({'acl': {'owners': ['me']},
                       'tags': ['foo']})
-        rscm = ResourceSubsConfigMatcher()
-        scs = [SubscriptionConfig({}),
-               SubscriptionConfig(
+        rscm = ResourceSubsCfgMatcher()
+        scs = [SubscriptionCfg({}),
+               SubscriptionCfg(
                    {'enabled': True}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'enabled': True,
                    'acl': {'owners': ['me']}}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'enabled': False,
                    'acl': {'owners': ['me']}})]
-        assert [SubscriptionConfig({
+        assert [SubscriptionCfg({
             'enabled': True,
             'acl': {'owners': ['me']}})] == list(rscm.resource_subscriptions(r, scs))
 
     def test_resource_subs_ids(self):
         r = Resource({'acl': {'owners': ['me']},
                       'tags': ['foo']})
-        rscm = ResourceSubsConfigMatcher()
-        scs = [SubscriptionConfig({'id': 'subs/01'}),
-               SubscriptionConfig(
+        rscm = ResourceSubsCfgMatcher()
+        scs = [SubscriptionCfg({'id': 'subs/01'}),
+               SubscriptionCfg(
                    {'enabled': True,
                     'id': 'subs/02'}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'id': 'subs/03',
                    'enabled': True,
                    'acl': {'owners': ['me']}}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'id': 'subs/04',
                    'enabled': False,
                    'acl': {'owners': ['me']}})]
@@ -91,31 +90,31 @@ class TestResourceSubsConfigMatcher(unittest.TestCase):
 class TestTaggedResourceSubsConfigMatcher(unittest.TestCase):
 
     def test_init(self):
-        trscm = TaggedResourceSubsConfigMatcher()
+        trscm = TaggedResourceSubsCfgMatcher()
         assert False is trscm.resource_subscribed(Resource({}),
-                                                  SubscriptionConfig({}))
+                                                  SubscriptionCfg({}))
 
     def test_resource_subscribed(self):
         r = Resource({'acl': {'owners': ['me']},
                       'tags': ['foo']})
 
-        trscm = TaggedResourceSubsConfigMatcher()
+        trscm = TaggedResourceSubsCfgMatcher()
 
-        sc = SubscriptionConfig({'enabled': True})
+        sc = SubscriptionCfg({'enabled': True})
         assert False is trscm.resource_subscribed(r, sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'enabled': False,
             'acl': {'owners': ['me']}})
         assert False is trscm.resource_subscribed(r, sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'enabled': True,
             'resource-filter': "tags='foo'",
             'acl': {'owners': ['me']}})
         assert True is trscm.resource_subscribed(r, sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'enabled': True,
             'resource-filter': "tags='bar'",
             'acl': {'owners': ['me']}})
@@ -124,33 +123,33 @@ class TestTaggedResourceSubsConfigMatcher(unittest.TestCase):
     def test_resource_subscription(self):
         r = Resource()
         assert [] == \
-               list(TaggedResourceSubsConfigMatcher()
+               list(TaggedResourceSubsCfgMatcher()
                     .resource_subscriptions(r,
-                                            [SubscriptionConfig({}),
-                                             SubscriptionConfig(
+                                            [SubscriptionCfg({}),
+                                             SubscriptionCfg(
                                                  {'enabled': True}),
-                                             SubscriptionConfig({
+                                             SubscriptionCfg({
                                                  'enabled': True,
                                                  'acl': {'owners': ['me']}}),
-                                             SubscriptionConfig({
+                                             SubscriptionCfg({
                                                  'enabled': True,
                                                  'resource-filter': "tags='foo'",
                                                  'acl': {'owners': ['me']}})]))
 
         r = Resource({'acl': {'owners': ['me']},
                       'tags': ['foo']})
-        scm = TaggedResourceSubsConfigMatcher()
-        scs = [SubscriptionConfig({}),
-               SubscriptionConfig(
+        scm = TaggedResourceSubsCfgMatcher()
+        scs = [SubscriptionCfg({}),
+               SubscriptionCfg(
                    {'enabled': True}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'enabled': True,
                    'acl': {'owners': ['me']}}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'enabled': True,
                    'resource-filter': "tags='foo'",
                    'acl': {'owners': ['me']}})]
-        assert [SubscriptionConfig({
+        assert [SubscriptionCfg({
             'enabled': True,
             'resource-filter': "tags='foo'",
             'acl': {'owners': ['me']}})] == list(scm.resource_subscriptions(r, scs))
@@ -158,22 +157,22 @@ class TestTaggedResourceSubsConfigMatcher(unittest.TestCase):
     def test_resource_subs_ids(self):
         r = Resource({'acl': {'owners': ['me']},
                       'tags': ['foo', 'bar']})
-        rscm = TaggedResourceSubsConfigMatcher()
-        scs = [SubscriptionConfig({'id': 'subs/01'}),
-               SubscriptionConfig(
+        rscm = TaggedResourceSubsCfgMatcher()
+        scs = [SubscriptionCfg({'id': 'subs/01'}),
+               SubscriptionCfg(
                    {'enabled': True,
                     'id': 'subs/02'}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'id': 'subs/03',
                    'enabled': True,
                    'resource-filter': "tags='foo'",
                    'acl': {'owners': ['me']}}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'id': 'subs/04',
                    'enabled': False,
                    'resource-filter': "tags='foo'",
                    'acl': {'owners': ['me']}}),
-               SubscriptionConfig({
+               SubscriptionCfg({
                    'id': 'subs/05',
                    'enabled': True,
                    'resource-filter': "tags='bar'",
@@ -184,74 +183,74 @@ class TestTaggedResourceSubsConfigMatcher(unittest.TestCase):
 class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
 
     def test_init(self):
-        scm = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({}))
-        assert [] == scm.resource_subscriptions([SubscriptionConfig({})])
+        scm = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({}))
+        assert [] == scm.resource_subscriptions([SubscriptionCfg({})])
 
     def test_load_thld_above_below(self):
-        sc = SubscriptionConfig({'criteria': {
+        sc = SubscriptionCfg({'criteria': {
             'kind': 'numeric',
             'value': '90'}})
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_above_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert False is nem._load_moved_above_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 2.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_below_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert False is nem._load_moved_below_thld(sc)
 
     def test_load_thld_over(self):
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'criteria': {
                 'kind': 'numeric',
                 'value': '90'
             }})
         assert False is nem._load_moved_over_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_over_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert True is nem._load_moved_over_thld(sc)
 
     def test_match_load(self):
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'criteria': {
                 'metric': 'foo',
                 'condition': 'is',
                 'value': 'false',
                 'kind': 'bool'
             }})
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({}))
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({}))
         assert None is nem.match_load(sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'criteria': {
                 'metric': 'load',
                 'condition': '>',
@@ -259,51 +258,51 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
                 'kind': 'numeric'
             }})
         # no change in load
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert None is nem.match_load(sc)
 
         # load increased above threshold
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert [True, False] == list(nem.match_load(sc).values())
 
         # load decreased below threshold and recovered
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}},
             'RESOURCES_PREV': {
                 'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'}}}))
         assert [True, True] == list(nem.match_load(sc).values())
 
     def test_ram_thld_above_below(self):
-        sc = SubscriptionConfig({'criteria': {
+        sc = SubscriptionCfg({'criteria': {
             'kind': 'numeric',
             'value': '90'}})
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'RAM': {'used': 900, 'capacity': 1000, 'topic': 'ram'}},
             'RESOURCES_PREV': {
                 'RAM': {'used': 899, 'capacity': 1000, 'topic': 'ram'}}}))
         assert False is nem._ram_moved_above_thld(sc)
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'RAM': {'used': 901, 'capacity': 1000, 'topic': 'ram'}},
             'RESOURCES_PREV': {
                 'RAM': {'used': 850, 'capacity': 1000, 'topic': 'ram'}}}))
         assert True is nem._ram_moved_above_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'RAM': {'used': 900, 'capacity': 1000, 'topic': 'ram'}},
             'RESOURCES_PREV': {
                 'RAM': {'used': 901, 'capacity': 1000, 'topic': 'ram'}}}))
         assert False is nem._ram_moved_below_thld(sc)
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'RAM': {'used': 899, 'capacity': 1000, 'topic': 'ram'}},
             'RESOURCES_PREV': {
@@ -311,13 +310,13 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert True is nem._ram_moved_below_thld(sc)
 
     def test_disk_thld_above_below(self):
-        sc = SubscriptionConfig({'criteria': {
+        sc = SubscriptionCfg({'criteria': {
             'dev-name': 'C:',
             'kind': 'numeric',
             'value': '90'}})
         # None cases
         # disk not known
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 9.1, 'capacity': 10, 'device': 'A:'}]},
             'RESOURCES_PREV': {
@@ -326,11 +325,11 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert None is nem._disk_moved_below_thld(sc)
 
         # previous data for the disk not defined
-        sc = SubscriptionConfig({'criteria': {
+        sc = SubscriptionCfg({'criteria': {
             'dev-name': 'A:',
             'kind': 'numeric',
             'value': '90'}})
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 9.1, 'capacity': 10, 'device': 'A:'}]},
             'RESOURCES_PREV': {
@@ -338,7 +337,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert None is nem._disk_moved_above_thld(sc)
         assert None is nem._disk_moved_below_thld(sc)
         # current data for the disk not defined
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 9.1, 'capacity': 10, 'device': 'C:'}]},
             'RESOURCES_PREV': {
@@ -346,26 +345,26 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert None is nem._disk_moved_above_thld(sc)
         assert None is nem._disk_moved_below_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 8.9, 'capacity': 10, 'device': 'A:'}]},
             'RESOURCES_PREV': {
                 'DISKS': [{'used': 9, 'capacity': 10, 'device': 'A:'}]}}))
         assert False is nem._disk_moved_above_thld(sc)
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 9.1, 'capacity': 10, 'device': 'A:'}]},
             'RESOURCES_PREV': {
                 'DISKS': [{'used': 8.9, 'capacity': 10, 'device': 'A:'}]}}))
         assert True is nem._disk_moved_above_thld(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 9, 'capacity': 10, 'device': 'A:'}]},
             'RESOURCES_PREV': {
                 'DISKS': [{'used': 9, 'capacity': 10, 'device': 'A:'}]}}))
         assert False is nem._disk_moved_below_thld(sc)
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
             'RESOURCES': {
                 'DISKS': [{'used': 8.9, 'capacity': 10, 'device': 'A:'}]},
             'RESOURCES_PREV': {
@@ -373,108 +372,105 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert True is nem._disk_moved_below_thld(sc)
 
     def test_match_went_onoffline(self):
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({}))
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({}))
         assert False is nem._went_online()
         assert False is nem._went_offline()
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': True,
              'ONLINE_PREV': True}))
         assert False is nem._went_online()
         assert False is nem._went_offline()
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': False,
              'ONLINE_PREV': False}))
         assert False is nem._went_online()
         assert False is nem._went_offline()
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': True,
              'ONLINE_PREV': False}))
         assert True is nem._went_online()
         assert False is nem._went_offline()
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': False,
              'ONLINE_PREV': True}))
         assert False is nem._went_online()
         assert True is nem._went_offline()
 
     def test_match_online(self):
-        sc = SubscriptionConfig(
+        sc = SubscriptionCfg(
             {'criteria': {
                 'metric': 'foo',
                 'kind': 'boolean',
                 'condition': 'bar',
                 'value': 'true'
             }})
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics({}))
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({}))
         assert None is nem.match_online(sc)
 
-        sc = SubscriptionConfig(
+        sc = SubscriptionCfg(
             {'criteria': {
                 'metric': 'state',
                 'kind': 'boolean',
                 'condition': 'no',
                 'value': 'true'
             }})
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': True,
              'ONLINE_PREV': True}))
         assert None is nem.match_online(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': False,
              'ONLINE_PREV': False}))
         assert None is nem.match_online(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': False,
              'ONLINE_PREV': True}))
         assert nem.MATCHED is nem.match_online(sc)
 
-        nem = NuvlaEdgeSubsConfMatcher(NuvlaEdgeMetrics(
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
             {'ONLINE': True,
              'ONLINE_PREV': False}))
         assert nem.MATCHED_RECOVERY is nem.match_online(sc)
 
     def test_network_device_name(self):
 
-        sc = SubscriptionConfig({'criteria': {}})
+        sc = SubscriptionCfg({'criteria': {}})
         nerm = NuvlaEdgeMetrics()
-        nem = NuvlaEdgeSubsConfMatcher(nerm)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm)
         assert None is nem.network_device_name(sc)
 
-        sc = SubscriptionConfig({'criteria': {'dev-name': 'wlan0'}})
+        sc = SubscriptionCfg({'criteria': {'dev-name': 'wlan0'}})
         nerm = NuvlaEdgeMetrics({})
-        nem = NuvlaEdgeSubsConfMatcher(nerm)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm)
         assert 'wlan0' == nem.network_device_name(sc)
 
-        sc = SubscriptionConfig({'criteria': {'dev-name': 'wlan0'}})
+        sc = SubscriptionCfg({'criteria': {'dev-name': 'wlan0'}})
         nerm = NuvlaEdgeMetrics({
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'}})
-        nem = NuvlaEdgeSubsConfMatcher(nerm)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm)
         assert 'wlan0' == nem.network_device_name(sc)
 
-        sc = SubscriptionConfig({'criteria': {}})
+        sc = SubscriptionCfg({'criteria': {}})
         nerm = NuvlaEdgeMetrics({
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth1'}})
-        nem = NuvlaEdgeSubsConfMatcher(nerm)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm)
         assert 'eth1' == nem.network_device_name(sc)
 
 
-class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
+class TestNuvlaEdgeSubsConfMatcherDBInMem(TestRxTxDriverESMockedBase):
 
     driver = None
-
-    def setUp(self) -> None:
-        self.driver = RxTxDriverInMem()
 
     def test_match_net_above_thld_empty_metrics(self):
         """
         No metrics provided. No matching will be performed.
         """
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'criteria': {
                 'metric': 'network-tx',
                 'condition': '>',
@@ -483,8 +479,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             }})
         nerm = NuvlaEdgeMetrics({})
         rxtx_db = RxTxDB(self.driver)
-        rxtx_db.update(nerm, ['subs/01'])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         assert None is nem.network_tx_above_thld(sc)
 
@@ -494,7 +490,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         don't match expected Rx or Tx ones.
         """
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subs/01',
             'acl': {'owners': ['me']},
             'enabled': True,
@@ -526,12 +522,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher()\
-            .resource_subscriptions_ids(nerm, [sc])
-        assert 1 == len(subs_conf_ids)
         rxtx_db = RxTxDB(self.driver)
-        rxtx_db.update(nerm, subs_conf_ids)
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         assert None is nem.network_tx_above_thld(sc)
 
@@ -541,7 +534,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         subscription configuration and is missing in the metrics.
         """
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subs/01',
             'acl': {'owners': ['me']},
             'enabled': True,
@@ -573,12 +566,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher() \
-            .resource_subscriptions_ids(nerm, [sc])
-        assert 1 == len(subs_conf_ids)
         rxtx_db = RxTxDB(self.driver)
-        rxtx_db.update(nerm, ['subs/01'])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         return
 
@@ -587,7 +577,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         Network DB is not provided. No network metrics matching will be done.
         """
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subs/01',
             'acl': {'owners': ['me']},
             'enabled': True,
@@ -619,10 +609,10 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher() \
+        subs_conf_ids = TaggedResourceSubsCfgMatcher() \
             .resource_subscriptions_ids(nerm, [sc])
         assert 1 == len(subs_conf_ids)
-        nem = NuvlaEdgeSubsConfMatcher(nerm, net_db=None)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, net_db=None)
         assert None is nem.network_rx_above_thld(sc)
 
     def test_match_net_above_thld_value_goes_above_thld_no_reset_two_subs(self):
@@ -630,7 +620,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         Rx and Tx go above the threshold on a network interface of NE.
         """
 
-        sc_rx = SubscriptionConfig({
+        sc_rx = SubscriptionCfg({
             'id': 'subs/01',
             'criteria': {
                 'metric': 'network-rx',
@@ -642,7 +632,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             'acl': {'owners': ['me']},
             'enabled': True
         })
-        sc_tx = SubscriptionConfig({
+        sc_tx = SubscriptionCfg({
             'id': 'subs/02',
             'criteria': {
                 'metric': 'network-tx',
@@ -685,13 +675,10 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher \
-            .resource_subscriptions_ids(nerm, [sc_rx, sc_tx])
-        assert 2 == len(subs_conf_ids)
         rxtx_db = RxTxDB(self.driver)
-        rxtx_db.update(nerm, subs_conf_ids)
+        rxtx_db.update(nerm, [sc_rx, sc_tx])
 
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc_rx)
         assert None is nem.network_tx_above_thld(sc_tx)
 
@@ -722,17 +709,14 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher \
-            .resource_subscriptions_ids(nerm, [sc_rx, sc_tx])
-        assert 2 == len(subs_conf_ids)
-        rxtx_db.update(nerm, subs_conf_ids)
+        rxtx_db.update(nerm, [sc_rx, sc_tx])
 
         assert sum(deltas_rx[:2]) == \
                rxtx_db.get_rx_gb(sc_rx['id'], 'ne/1', 'eth0')
         assert sum(deltas_tx[:2]) == \
                rxtx_db.get_tx_gb(sc_tx['id'], 'ne/1', 'eth0')
 
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc_rx)
         assert None is nem.network_tx_above_thld(sc_tx)
 
@@ -761,17 +745,14 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher \
-            .resource_subscriptions_ids(nerm, [sc_rx, sc_tx])
-        assert 2 == len(subs_conf_ids)
-        rxtx_db.update(nerm, subs_conf_ids)
+        rxtx_db.update(nerm, [sc_rx, sc_tx])
 
         assert sum(deltas_rx[:3]) == \
                rxtx_db.get_rx_gb(sc_rx['id'], 'ne/1', 'eth0')
         assert sum(deltas_tx[:3]) == \
                rxtx_db.get_tx_gb(sc_tx['id'], 'ne/1', 'eth0')
 
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert {'interface': 'eth0', 'value': sum(deltas_rx[:3])} == \
                nem.network_rx_above_thld(sc_rx)
         assert None is nem.network_rx_above_thld(sc_rx)
@@ -801,17 +782,14 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                }]},
             'RESOURCES_PREV': {
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
-        subs_conf_ids = TaggedResourceSubsConfigMatcher \
-            .resource_subscriptions_ids(nerm, [sc_rx, sc_tx])
-        assert 2 == len(subs_conf_ids)
-        rxtx_db.update(nerm, subs_conf_ids)
+        rxtx_db.update(nerm, [sc_rx, sc_tx])
 
         assert sum(deltas_rx[:4]) == \
                rxtx_db.get_rx_gb(sc_rx['id'], 'ne/1', 'eth0')
         assert sum(deltas_tx[:4]) == \
                rxtx_db.get_tx_gb(sc_tx['id'], 'ne/1', 'eth0')
 
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
 
         assert None is nem.network_rx_above_thld(sc_rx)
         assert True is rxtx_db.get_above_thld(sc_rx['id'], 'ne/1', 'eth0', 'rx')
@@ -829,7 +807,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
 
         rxtx_db = RxTxDB(self.driver)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'criteria': {
                 'metric': 'foo',
                 'condition': 'bar',
@@ -837,12 +815,12 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 'kind': 'numeric'
             }})
         nerm = NuvlaEdgeMetrics({})
-        rxtx_db.update(nerm, ['sub/01'])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         assert None is nem.network_tx_above_thld(sc)
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subs/01',
             'criteria': {
                 'metric': 'network-rx',
@@ -852,7 +830,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             }})
         nerm = NuvlaEdgeMetrics({})
         rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
 
         nerm = NuvlaEdgeMetrics({
@@ -862,8 +840,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'eth0',
                  'bytes-transmitted': 1 * 1024 ** 2,
                  'bytes-received': 2 * 1024 ** 2}]}})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
         assert 0 == rx.total()
@@ -875,8 +853,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'eth0',
                  'bytes-transmitted': gb_to_bytes(1),
                  'bytes-received': gb_to_bytes(2)}]}})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
         assert 2.0 == bytes_to_gb(rx.total())
@@ -889,8 +867,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
                  'bytes-received': 300 * 1024 ** 2}]}})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
         assert 2.3 == round(bytes_to_gb(rx.total()), 1)
@@ -903,8 +881,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
                  'bytes-received': gb_to_bytes(4)}]}})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         value_bytes = gb_to_bytes(6)
         value_gb = bytes_to_gb(value_bytes)
         assert {'interface': 'eth0', 'value': value_gb} == \
@@ -920,8 +898,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
                  'bytes-received': gb_to_bytes(5)}]}})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         value_bytes = gb_to_bytes(7)
         value_gb = bytes_to_gb(value_bytes)
         assert None is nem.network_rx_above_thld(sc)
@@ -941,8 +919,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
                  'bytes-received': gb_to_bytes(6)}]}})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         value_gb = bytes_to_gb(gb_to_bytes(8))
         assert {'interface': 'eth0', 'value': value_gb} == \
                nem.network_rx_above_thld(sc)
@@ -956,7 +934,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         DB on the individual subscription configurations.
         """
 
-        sc1 = SubscriptionConfig({
+        sc1 = SubscriptionCfg({
             'id': 'subscription-config/01',
             'acl': {'owners': ['user/01']},
             'category': 'notification',
@@ -974,7 +952,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             'resource-filter': "tags='nuvlabox=True'",
             'resource-kind': 'nuvlabox',
             'resource-type': 'subscription-config'})
-        sc2 = SubscriptionConfig({
+        sc2 = SubscriptionCfg({
             'id': 'subscription-config/02',
             'acl': {'owners': ['user/02']},
             'category': 'notification',
@@ -990,7 +968,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             'resource-filter': "tags='nuvlabox=True'",
             'resource-kind': 'nuvlabox',
             'resource-type': 'subscription-config'})
-        sc3 = SubscriptionConfig({
+        sc3 = SubscriptionCfg({
             'id': 'subscription-config/03',
             'acl': {'owners': ['user/03']},
             'category': 'notification',
@@ -1006,6 +984,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             'resource-filter': "tags='nuvlabox=True'",
             'resource-kind': 'nuvlabox',
             'resource-type': 'subscription-config'})
+
+        subs_cfgs = [sc1, sc2, sc3]
 
         rxtx_db = RxTxDB(self.driver)
         nerm = NuvlaEdgeMetrics({
@@ -1031,11 +1011,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                         'user/02',
                         'user/03']}})
 
-        subs_conf_ids = TaggedResourceSubsConfigMatcher()\
-            .resource_subscriptions_ids(nerm, [sc1, sc2, sc3])
-
         # set baseline
-        rxtx_db.update(nerm, subs_conf_ids)
+        rxtx_db.update(nerm, subs_cfgs)
 
         # increment to go above thresholds defined for subs 1 and 2
         rxtx_db = RxTxDB(self.driver)
@@ -1061,9 +1038,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                         'user/01',
                         'user/02',
                         'user/03']}})
-        rxtx_db.update(nerm, subs_conf_ids)
+        rxtx_db.update(nerm, subs_cfgs)
 
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         match_cs1 = nem.match_all([sc1])
         assert 1 == len(match_cs1)
         assert True is rxtx_db.get_above_thld(sc1['id'], nerm['id'], 'eth0', 'rx')
@@ -1093,9 +1070,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 {'interface': 'docker0',
                  'bytes-transmitted': 0,
                  'bytes-received': 0}]}
-        rxtx_db.update(nerm, subs_conf_ids)
-        nem = NuvlaEdgeSubsConfMatcher(nerm, rxtx_db)
-        match_all = nem.match_all([sc1, sc2, sc3])
+        rxtx_db.update(nerm, subs_cfgs)
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
+        match_all = nem.match_all(subs_cfgs)
         assert 1 == len(match_all)
         assert True is rxtx_db.get_above_thld(sc1['id'], nerm['id'], 'eth0', 'rx')
         assert True is rxtx_db.get_above_thld(sc2['id'], nerm['id'], 'eth0', 'rx')
@@ -1103,7 +1080,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         assert sc3['id'] == match_all[0]['id']
 
     def test_match_all_none(self):
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'foo',
             'criteria': {
                 'metric': 'foo',
@@ -1111,10 +1088,10 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 'value': '0',
                 'kind': 'numeric'}})
         nerm = NuvlaEdgeMetrics({})
-        nescm = NuvlaEdgeSubsConfMatcher(nerm)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm)
         assert [] == nescm.match_all([sc])
 
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'enabled': True,
             'resource-filter': "tags='foo'",
             'acl': {'owners': ['me']},
@@ -1127,11 +1104,11 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
             'ACL': {'owners': ['me']},
             'TAGS': ['foo']
         })
-        nescm = NuvlaEdgeSubsConfMatcher(nerm)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm)
         assert [] == nescm.match_all([sc])
 
     def test_match_all(self):
-        sc_disk = SubscriptionConfig({
+        sc_disk = SubscriptionCfg({
             'id': 'subscription-config/01',
             'name': 'NE disk',
             'description': 'NE disk',
@@ -1148,7 +1125,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 'kind': 'numeric',
                 'dev-name': 'disk0p1'
             }})
-        sc_load = SubscriptionConfig({
+        sc_load = SubscriptionCfg({
             'id': 'subscription-config/02',
             'name': 'NE load',
             'description': 'NE load',
@@ -1163,7 +1140,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 'condition': '>',
                 'value': '90',
                 'kind': 'numeric'}})
-        sc_ram = SubscriptionConfig({
+        sc_ram = SubscriptionCfg({
             'id': 'subscription-config/03',
             'name': 'NE ram',
             'description': 'NE ram',
@@ -1178,7 +1155,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 'condition': '>',
                 'value': '90',
                 'kind': 'numeric'}})
-        sc_rx_wlan1 = SubscriptionConfig({
+        sc_rx_wlan1 = SubscriptionCfg({
             'id': 'subscription-config/04',
             'name': 'NE network Rx',
             'description': 'NE network Rx',
@@ -1195,7 +1172,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                 'kind': 'numeric',
                 'dev-name': 'wlan1'
             }})
-        sc_tx_gw = SubscriptionConfig({
+        sc_tx_gw = SubscriptionCfg({
             'id': 'subscription-config/05',
             'name': 'NE network Tx',
             'description': 'NE network Tx',
@@ -1291,16 +1268,13 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
 
         subs_confs = [sc_disk, sc_load, sc_ram, sc_rx_wlan1, sc_tx_gw]
 
-        subs_confs_ids = TaggedResourceNetSubsConfigMatcher() \
-            .resource_subscriptions_ids(nerm1, subs_confs)
-
         net_db = RxTxDB(self.driver)
 
         # Minimum two updates are required to detect the increase in the Rx/Tx.
-        net_db.update(nerm1, subs_confs_ids)
-        net_db.update(nerm2, subs_confs_ids)
+        net_db.update(nerm1, subs_confs)
+        net_db.update(nerm2, subs_confs)
 
-        nescm = NuvlaEdgeSubsConfMatcher(nerm2, net_db)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm2, net_db)
         res = nescm.match_all(subs_confs)
         ids_res = list(map(lambda x: x['id'], res))
         ids = set(f'subscription-config/0{i}' for i in range(1, len(subs_confs) + 1))
@@ -1311,7 +1285,7 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         thold = 4.5
 
         # User sets 4.5gb threshold for the notification.
-        sc_rx_wlan1 = SubscriptionConfig({
+        sc_rx_wlan1 = SubscriptionCfg({
             'id': 'subscription-config/01',
             'name': 'NE network Rx',
             'description': 'NE network Rx',
@@ -1348,9 +1322,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        ne_subs_ids = [sc_rx_wlan1['id']]
+        ne_subs_cfgs = [sc_rx_wlan1]
         net_db = RxTxDB(self.driver)
-        net_db.update(nerm0, ne_subs_ids)
+        net_db.update(nerm0, ne_subs_cfgs)
 
         # NuvlaEdge sends metric with value of 4.6gb total received data.
         # This is 110mb above the threshold.
@@ -1373,8 +1347,8 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
 
-        net_db.update(nerm1, ne_subs_ids)
-        nescm = NuvlaEdgeSubsConfMatcher(nerm1, net_db)
+        net_db.update(nerm1, ne_subs_cfgs)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm1, net_db)
 
         # The network metric matched the threshold condition.
         res = nescm.match_all([sc_rx_wlan1])
@@ -1386,11 +1360,11 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         # This makes increment of 110mb and total 220mb above the 4.5 threshold.
         nerm1['RESOURCES']['net-stats'][0]['bytes-received'] = \
             gb_to_bytes(thold + 0.2)
-        net_db.update(nerm1, ne_subs_ids)
+        net_db.update(nerm1, ne_subs_cfgs)
 
         # Because we already matched the condition (and it was persisted), the
         # new match will not be triggered.
-        nescm = NuvlaEdgeSubsConfMatcher(nerm1, net_db)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm1, net_db)
         res = nescm.match_all([sc_rx_wlan1])
         assert 0 == len(res)
 
@@ -1407,9 +1381,9 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         # b) "above_thold" flag on the RxTx value in the network DB is reset.
         nerm1['RESOURCES']['net-stats'][0]['bytes-received'] = \
             gb_to_bytes(thold - 0.5)
-        net_db.update(nerm1, ne_subs_ids)
+        net_db.update(nerm1, ne_subs_cfgs)
 
-        nescm = NuvlaEdgeSubsConfMatcher(nerm1, net_db)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm1, net_db)
         res = nescm.match_all([sc_rx_wlan1])
         assert 0 == len(res)
         assert False is net_db.get_above_thld(sc_rx_wlan1['id'], *resource)
@@ -1417,17 +1391,12 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(unittest.TestCase):
         # Metric goes above the new threshold and it is matched.
         nerm1['RESOURCES']['net-stats'][0]['bytes-received'] = \
             gb_to_bytes(thold + 0.1)
-        net_db.update(nerm1, ne_subs_ids)
+        net_db.update(nerm1, ne_subs_cfgs)
 
-        nescm = NuvlaEdgeSubsConfMatcher(nerm1, net_db)
+        nescm = NuvlaEdgeSubsCfgMatcher(nerm1, net_db)
         # The network metric matched the threshold condition.
         res = nescm.match_all([sc_rx_wlan1])
         assert 1 == len(res)
         assert res[0]['subs_description'] == 'NE network Rx'
         assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
         assert True is net_db.get_above_thld(sc_rx_wlan1['id'], *resource)
-
-
-class TestNuvlaEdgeSubsConfMatcherDBES(TestRxTxDriverESMockedBase,
-                                       TestNuvlaEdgeSubsConfMatcherDBInMem):
-    pass

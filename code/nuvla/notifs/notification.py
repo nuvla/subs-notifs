@@ -3,7 +3,7 @@ from typing import List, Dict, Union
 
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SubscriptionConfig
+from nuvla.notifs.subscription import SubscriptionCfg
 from nuvla.notifs.resource import Resource
 
 log = get_logger('notification')
@@ -35,7 +35,7 @@ class NotificationPublisher:
 
 
 class NuvlaEdgeNotification(dict):
-    def __init__(self, sc: SubscriptionConfig, metrics: Resource):
+    def __init__(self, sc: SubscriptionCfg, metrics: Resource):
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
@@ -51,7 +51,7 @@ class NuvlaEdgeNotification(dict):
 
 
 class NuvlaEdgeNotificationBuilder:
-    def __init__(self, sc: SubscriptionConfig, metrics: Resource):
+    def __init__(self, sc: SubscriptionCfg, metrics: Resource):
         self._n = NuvlaEdgeNotification(sc, metrics)
 
     def name(self, name: str):

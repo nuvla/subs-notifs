@@ -45,18 +45,15 @@ Example:
 sum(map(lambda x: x[1] - x[0], [[1, 2], [0, 4]])) => 5
 """
 
-import json
 import math
-import re
 from typing import Union, List
-from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone
-from dateutil import relativedelta
 
 import elasticsearch
 
-from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.log import get_logger, stdout_handler
+from nuvla.notifs.metric import NuvlaEdgeMetrics
+from nuvla.notifs.schema.rxtx import RxTx, RxTxEntry
+from nuvla.notifs.subscription import SubscriptionCfg
 
 log = get_logger('db')
 
@@ -79,267 +76,8 @@ def gb_to_bytes(value_gb: float) -> int:
     return int(value_gb * math.pow(1024, 3))
 
 
-def now(tz=None) -> datetime:
-    return datetime.now(tz)
-
-
-def next_month_first_day() -> datetime:
-    return (now().replace(day=1) + timedelta(days=32)) \
-        .replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-
-def _next_month_same_day(date: datetime) -> datetime:
-    """
-    Given `date`, returns same day of the next month relative to the `date`.
-    :param date: datetime
-    """
-    return date + relativedelta.relativedelta(months=1)
-
-
-def next_month_this_day(day: int) -> datetime:
-    """
-    Given `day` of month, returns same day of the next month.
-    :param day: int (range [1, 31])
-    """
-    assert 1 <= day <= 31
-    dt = now(tz=timezone.utc)
-    return _next_month_same_day(datetime(dt.year, dt.month, day))
-
-
 class DBInconsistentStateError(Exception):
     pass
-
-
-class Window:
-    """
-    Fixed resettable window within which the accumulation of values happens.
-    """
-
-    RE_VALID_TIME_WINDOW = re.compile('[0-9].*d$')
-
-    def __init__(self, ts_window='month', month_day=1):
-        """
-        :param ts_window: possible values: {month, Nd}; with 'month' working on
-                          calendar months level, and Nd is a number of days to
-                          roll over on.
-        :param month_day: int (range [1, 31]), day of the month for reset.
-        """
-        if ts_window == 'month':
-            assert 1 <= month_day <= 31
-            self.month_day = month_day
-        else:
-            self.month_day = None
-        self._ts_window: str = None
-        self.ts_reset: datetime = None
-        self.ts_window: str = ts_window
-
-    @classmethod
-    def _valid_time_window(cls, window: str) -> bool:
-        return bool(re.match(cls.RE_VALID_TIME_WINDOW, window))
-
-    @classmethod
-    def _next_reset(cls, window: str, month_day: int = 1) -> datetime:
-        if window == 'month':
-            return next_month_this_day(month_day)
-        if cls._valid_time_window(window):
-            days = int(window.replace('d', ''))
-            return datetime.now() + timedelta(days=days)
-        raise ValueError(f'Invalid window: {window}')
-
-    def _update_next_reset(self):
-        self.ts_reset = self._next_reset(self.ts_window, self.month_day)
-
-    @property
-    def ts_window(self) -> str:
-        return self._ts_window
-
-    @ts_window.setter
-    def ts_window(self, window: str):
-        self.ts_reset = self._next_reset(window, self.month_day)
-        self._ts_window = window
-
-    def need_update(self) -> bool:
-        return self.ts_reset and now() >= self.ts_reset
-
-    def update(self):
-        self._update_next_reset()
-
-    def to_dict(self):
-        return {'ts_window': self.ts_window,
-                'ts_reset': self.ts_reset.timestamp(),
-                'month_day': self.month_day}
-
-    @staticmethod
-    def from_dict(d: dict):
-        if d is None:
-            return None
-        w = Window()
-        w.ts_window = d['ts_window']
-        w.ts_reset = datetime.fromtimestamp(d['ts_reset'])
-        w.month_day = d['month_day']
-        return w
-
-    def to_json(self):
-        return json.dumps(self.to_dict())
-
-    def from_json(self, j: str):
-        self.from_dict(json.loads(j))
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}[ts_window={self.ts_window}, ' \
-               f'ts_reset={self.ts_reset}'
-
-
-class RxTxValue:
-    """
-    Implements Rx/Tx value taking into account possibility of zeroing of the
-    bytes stream counter of the network interface on the host.
-    """
-
-    def __init__(self, init_value=None):
-        if init_value is not None:
-            self._values = init_value
-        else:
-            self._values: list = []
-
-    def total(self) -> int:
-        """
-        Returns the current total value of the Rx or Tx. The implementation
-        takes into account possible zeroing of the Rx/Tx values over a period
-        of time the accumulation is done.
-        :return: int
-        """
-        return sum(map(lambda x: x and x[1] - x[0] or 0, self._values))
-
-    def set(self, current: int):
-        """
-        :param current: current value of the counter
-        """
-
-        if len(self._values) == 0:
-            self._values = [[current, current]]
-        else:
-            # There was zeroing of the counters. Which we see as the current
-            # value being lower than the previous one.
-            if self._values[-1][-1] > current:
-                self._values.append([0, current])
-            else:
-                self._values[-1][-1] = current
-
-    def reset(self):
-        self._values = []
-
-    def get(self):
-        return self._values
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}[values={self._values}]'
-
-
-class RxTx:
-    """
-    Tracks network Receive/Transmit, above threshold state, and defined window.
-    """
-
-    def __init__(self, window: Union[None, Window] = None):
-        self.value: RxTxValue = RxTxValue()
-        self.above_thld: bool = False
-        self.window: Window = window
-
-    def set_window(self, window: Window):
-        self.window = window
-
-    def set(self, current: int):
-        """
-        :param current: current value of the counter
-        """
-
-        self._apply_window()
-
-        self.value.set(current)
-
-    def total(self) -> int:
-        return self.value.total()
-
-    def get_above_thld(self) -> bool:
-        return self.above_thld
-
-    def set_above_thld(self):
-        self.above_thld = True
-
-    def reset_above_thld(self):
-        self.above_thld = False
-
-    def reset(self):
-        """Resting 'total' only. 'prev' is needed to compute next delta.
-        """
-        self.value.reset()
-        self.reset_above_thld()
-
-    def _apply_window(self):
-        if self.window and self.window.need_update():
-            self.reset()
-            self.window.update()
-
-    def to_dict(self):
-        return {'value': self.value.get(),
-                'above_thld': self.above_thld,
-                'window': self.window and self.window.to_dict() or None}
-
-    @staticmethod
-    def from_dict(d: dict):
-        rxtx = RxTx()
-        rxtx.value = RxTxValue(d['value'])
-        rxtx.above_thld = d['above_thld']
-        rxtx.window = Window.from_dict(d['window'])
-        return rxtx
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}[value={self.value}, ' \
-               f'above_thld={self.above_thld}, ' \
-               f'window={self.window}]'
-
-
-# TODO: there is a problem with the abstract methods and their signatures
-#       when the class is used. So, the class is not used for the moment.
-class RxTxDriverABC(ABC):
-    """
-    Interface of DB driver for persisting Rx/Tx.
-    """
-
-    @abstractmethod
-    def set(self, subs_id, ne_id, kind, interface=None, value=None):
-        """
-        TODO: document.
-        :param subs_id:
-        :param ne_id:
-        :param kind:
-        :param interface:
-        :param value:
-        :return:
-        """
-
-    @abstractmethod
-    def get_data(self, subs_id, ne_id, iface, kind) -> Union[None, RxTx]:
-        """
-        TODO: document.
-        :param subs_id:
-        :param ne_id:
-        :param iface:
-        :param kind:
-        :return:
-        """
-
-    @abstractmethod
-    def reset(self, subs_id, ne_id, iface, kind):
-        """
-        TODO: document.
-        :param subs_id:
-        :param ne_id:
-        :param iface:
-        :param kind:
-        :return:
-        """
 
 
 class RxTxDriverES:
@@ -374,6 +112,14 @@ class RxTxDriverES:
 
     def close(self):
         self.es = None
+
+    def is_connected(self) -> bool:
+        try:
+            res = self.es.info()
+        except Exception as ex:
+            log.warning('Driver is not connected to DB: %s', ex)
+            return False
+        return 200 == res.get('status')
 
     def _index_content(self) -> dict:
         return self.es.search(index=self.INDEX_NAME,
@@ -419,10 +165,10 @@ class RxTxDriverES:
         return RxTx.from_dict(rxtx)
 
     @classmethod
-    def _rxtx_from_value_serialized(cls, value: int, rxtx=None) -> dict:
+    def _rxtx_from_value_serialized(cls, rxtx_entry: RxTxEntry, rxtx=None) -> dict:
         if None is rxtx:
-            rxtx = RxTx()
-        rxtx.set(value)
+            rxtx = RxTx(rxtx_entry.window)
+        rxtx.set(rxtx_entry.value)
         return cls._rxtx_serialize(rxtx)
 
     @classmethod
@@ -434,40 +180,42 @@ class RxTxDriverES:
             return cls._rxtx_deserialize(data['rxtx'])
 
     @classmethod
-    def _doc_build(cls, subs_id, ne_id: str, kind: str, iface, value, rxtx=None) -> dict:
-        return {**cls._doc_base(subs_id, ne_id, iface, kind),
-                'rxtx': cls._rxtx_from_value_serialized(value, rxtx)}
+    def _doc_build(cls, rxtx_entry: RxTxEntry, rxtx=None) -> dict:
+        return {**cls._doc_base(rxtx_entry.subs_id, rxtx_entry.ne_id,
+                                rxtx_entry.iface, rxtx_entry.kind),
+                'rxtx': cls._rxtx_from_value_serialized(rxtx_entry, rxtx)}
 
     def _total_found(self, es_resp: dict) -> int:
         return es_resp['hits']['total']['value']
 
-    def set(self, subs_id, ne_id: str, kind: str, interface=None, value=None):
+    def set(self, rxtx_entry: RxTxEntry):
         """Set `value` for the `kind` ('rx'/'tx') on the network `interface` of
         NE `ne_id`. Implemented as UPSERT.
 
-        :param subs_id: subscription config id
-        :param ne_id: NE id
-        :param kind: 'rx' or 'tx'
-        :param interface: network interface name of the NE with ne_id
-        :param value: current 'rx' or 'tx' value as integer
+        :param rxtx_entry: object containing details on subscription, NE network
+                           metric and time window.
         """
-        query = self._data_query(subs_id, ne_id, interface, kind)
+        query = self._data_query(rxtx_entry.subs_id, rxtx_entry.ne_id,
+                                 rxtx_entry.iface, rxtx_entry.kind)
         resp = self._find(query)
         if self._total_found(resp) == 1:
+            # update
             _id = resp['hits']['hits'][0]['_id']
             rxtx: RxTx = self._rxtx_from_es_resp(resp)
             if rxtx:
-                doc = self._doc_build(subs_id, ne_id, kind, interface, value, rxtx)
+                doc = self._doc_build(rxtx_entry, rxtx)
                 log.debug('To update: %s', doc)
-                rxtx_ser = self._rxtx_from_value_serialized(value, rxtx)
+                rxtx_ser = self._rxtx_from_value_serialized(rxtx_entry, rxtx)
                 self._update(_id, rxtx_ser)
         else:
-            log.debug('Adding new: %s, %s, %s, %s', subs_id, ne_id, kind, interface)
-            doc = self._doc_build(subs_id, ne_id, kind, interface, value)
+            # insert
+            log.debug('Adding new: %s', rxtx_entry)
+            doc = self._doc_build(rxtx_entry)
             resp = self._insert(doc)
             log.debug(resp)
 
-    def get_data(self, subs_id, ne_id: str, iface: str, kind: str) -> Union[None, RxTx]:
+    def get_data(self, subs_id, ne_id: str, iface: str, kind: str) -> \
+            Union[None, RxTx]:
         """Returns RxTx object if found in DB by `ne_id`, `iface` and `kind`.
 
         Throws InconsistentDBStateError in case more than one object are found
@@ -491,7 +239,7 @@ class RxTxDriverES:
         if num_found > 1:
             raise DBInconsistentStateError(f'More than one object for {query}')
 
-    def reset(self, subs_id, ne_id: str, iface: str, kind: str):
+    def reset(self, subs_id: str, ne_id: str, iface: str, kind: str):
         """Resets corresponding RxTx object in DB by `ne_id`, `iface` and `kind`.
 
         :param subs_id: subscription configuration id
@@ -536,78 +284,8 @@ class RxTxDriverES:
                 self._update(resp['hits']['hits'][0]['_id'],
                              self._rxtx_serialize(rxtx))
 
-
-class RxTxDriverInMem:
-    """
-    Driver for in-memory persistence of Rx/Tx.
-    """
-
-    def __init__(self):
-        """
-        {'subscription/01':
-            'nuvlabox/01': {
-               'eth0': {'rx': RxTx[RxTxValue[values], above_thld, window],
-                        'tx': RxTx},
-               'docker0': {'rx': RxTx,
-                           'tx': RxTx}
-               ...
-               },
-            'nuvlabox/02: {},
-         'subscription/02':
-            'nuvlabox/01: {
-                'eth0': {'rx': RxTx,
-                         'tx': RxTx},
-                'docker0': {'rx': RxTx,
-                            'tx': RxTx}},
-         ...
-        }
-        """
-        self._db = {}
-
-    #
-    # Driver level method.
-
-    def set(self, subs_id, ne_id, kind, interface=None, value=None):
-        if subs_id in self._db:
-            if ne_id in self._db[subs_id]:
-                if interface in self._db[subs_id][ne_id]:
-                    if kind in self._db[subs_id][ne_id][interface]:
-                        self._db[subs_id][ne_id][interface][kind].set(value)
-                    else:
-                        val = RxTx()
-                        val.set(value)
-                        self._db[subs_id][ne_id][interface][kind] = val
-                else:
-                    val = RxTx()
-                    val.set(value)
-                    self._db[subs_id][ne_id][interface] = {kind: val}
-        else:
-            val = RxTx()
-            val.set(value)
-            self._db[subs_id] = {ne_id: {interface: {kind: val}}}
-
-    def reset(self, ne_id, iface, kind):
-        if self._db and len(self._db) > 0:
-            self._db[ne_id][iface][kind].reset()
-
-    def get_data(self, subs_id, ne_id, iface, kind) -> Union[None, RxTx]:
-        if self._db and len(self._db) > 0:
-            return self._db[subs_id][ne_id][iface][kind]
-        return None
-
-    def set_above_thld(self, subs_id, ne_id, iface, kind):
-        if self._db and len(self._db) > 0:
-            self._db[subs_id][ne_id][iface][kind].set_above_thld()
-
-    def reset_above_thld(self, subs_id, ne_id, iface, kind):
-        if self._db and len(self._db) > 0:
-            self._db[subs_id][ne_id][iface][kind].reset_above_thld()
-
-    def __len__(self):
-        return len(self._db)
-
-    def __repr__(self):
-        return str(self._db)
+    def __len__(self) -> int:
+        return len(self._index_all_docs())
 
 
 class RxTxDB:
@@ -617,20 +295,30 @@ class RxTxDB:
 
     def __init__(self, driver=None):
         if driver is None:
-            self._db = RxTxDriverInMem()
+            self._db = RxTxDriverES()
         else:
             self._db = driver
+        self.connect()
+
+    def connect(self):
+        self._db.connect()
+
+    def is_connected(self) -> bool:
+        return self._db.is_connected()
 
     #
     # Driver level methods.
 
-    def set(self, subs_id, ne_id, kind, iface, value):
+    def set(self, rxtx_entry: RxTxEntry):
         if self._db is not None:
-            self._db.set(subs_id, ne_id, kind, iface, value)
+            self._db.set(rxtx_entry)
 
-    def reset(self, subs_id, ne_id, iface, kind):
+    def reset(self, rxtx_entry: RxTxEntry):
         if self._db is not None:
-            self._db.reset(subs_id, ne_id, iface, kind)
+            self._db.reset(rxtx_entry.subs_id,
+                           rxtx_entry.ne_id,
+                           rxtx_entry.iface,
+                           rxtx_entry.kind)
 
     def get_data(self, subs_id, ne_id, iface, kind) -> Union[None, RxTx]:
         if self._db is not None:
@@ -640,23 +328,22 @@ class RxTxDB:
     #
     # Common methods.
 
-    def set_rx(self, subs_id: str, ne_id: str, data: dict):
+    def set_rx(self, rx_entry: RxTxEntry):
         """
-        :param subs_id: unique ID of the subscription configuration
-        :param ne_id: unique ID of the NE
-        :param data: {interface: eth0, value: 0}
+        :param rx_entry: Rx network metric with subscription related info to
+        be persisted in DB.
         """
-        if data:
-            self.set(subs_id, ne_id, 'rx', data['interface'], data['value'])
+        if rx_entry.kind == 'rx' and rx_entry.value:
+            self.set(rx_entry)
 
-    def set_tx(self, subs_id, ne_id: str, data: dict):
+    def set_tx(self, tx_entry: RxTxEntry):
         """
-        :param subs_id: unique ID of the subscription configuration
-        :param ne_id: unique ID of the NE
-        :param data: {interface: eth0, value: 0}
+        :param tx_entry: Tx network metric with subscription related info to
+        be persisted in DB.
+        :return:
         """
-        if data:
-            self.set(subs_id, ne_id, 'tx', data['interface'], data['value'])
+        if tx_entry.kind == 'rx' and tx_entry.value:
+            self.set(tx_entry)
 
     def get(self, subs_id, ne_id, iface, kind) -> Union[None, int]:
         data = self.get_data(subs_id, ne_id, iface, kind)
@@ -700,7 +387,8 @@ class RxTxDB:
     def reset_above_thld(self, subs_id, ne_id, iface, kind):
         self._db.reset_above_thld(subs_id, ne_id, iface, kind)
 
-    def update(self, metrics: NuvlaEdgeMetrics, subs_ids: List[str]):
+    def update(self, metrics: NuvlaEdgeMetrics,
+               subs_cfgs: List[SubscriptionCfg]):
         """
         Updates Rx/Tx metrics of the corresponding NuvlaEdge when it has an
         associated subscription. The underlying implementation works in UPSERT
@@ -711,15 +399,14 @@ class RxTxDB:
         `metrics` are coming.
 
         :param metrics: telemetry of a NuvlaEdge
-        :param subs_ids: list of IDs of subscriptions to the NuvlaEdge
+        :param subs_cfgs: list of subscription configs to the NuvlaEdge
         """
-        ne_id = metrics.get('id')
-        if ne_id:
-            for subs_id in subs_ids:
-                for v in metrics.net_rx_all():
-                    self.set_rx(subs_id, ne_id, v)
-                for v in metrics.net_tx_all():
-                    self.set_tx(subs_id,ne_id, v)
+        if 'id' in metrics:
+            for subs_cfg in subs_cfgs:
+                for metric in metrics.net_rx_all():
+                    self.set(RxTxEntry(subs_cfg, metric))
+                for metric in metrics.net_tx_all():
+                    self.set(RxTxEntry(subs_cfg, metric))
 
     def __len__(self):
         return len(self._db)

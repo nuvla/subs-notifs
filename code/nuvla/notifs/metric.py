@@ -8,14 +8,12 @@ This module contains
   way when a metric is not found in a collection of metrics.
 """
 
-from typing import Union, Callable, Any
+from typing import Union, Callable, Any, List
 
 from nuvla.notifs.resource import Resource
 from nuvla.notifs.log import get_logger
 
-
 log = get_logger('metric')
-
 
 EX_MSG_TMPL_KEY_NOT_FOUND = '{} not found under {}'
 
@@ -50,7 +48,40 @@ def key_error_ex_handler(func) -> Callable[..., Any]:
             return func(*args, **kwargs)
         except KeyError as ex:
             raise MetricNotFound(str(ex), args[1]) from ex
+
     return wrapper
+
+
+class NENetMetric(dict):
+
+    REQUIRED = {'id', 'iface', 'kind', 'value'}
+
+    def __init__(self, *args, **kwargs):
+        self._validate_input(*args, **kwargs)
+        dict.__init__(self, *args, **kwargs)
+
+    def __getattr__(self, attr):
+        return self[attr]
+
+    def _validate_input(self, *args, **kwargs):
+        keys = []
+        for v in args:
+            if isinstance(v, dict):
+                keys.extend(v.keys())
+        keys.extend(kwargs.keys())
+        assert self.REQUIRED.issubset(keys)
+
+    def id(self):
+        return self['id']
+
+    def iface(self):
+        return self['iface']
+
+    def kind(self):
+        return self['kind']
+
+    def value(self):
+        return self['value']
 
 
 class NuvlaEdgeMetrics(Resource):
@@ -67,6 +98,11 @@ class NuvlaEdgeMetrics(Resource):
     NET_STATS_KEY = 'net-stats'
     NET_TX_KEY = 'bytes-transmitted'
     NET_RX_KEY = 'bytes-received'
+    RX_KIND = 'rx'
+    TX_KIND = 'tx'
+    RXTX_KINDS = [RX_KIND, TX_KIND]
+    NET_RXTX_KEY_MAP = {RX_KIND: NET_RX_KEY,
+                        TX_KIND: NET_TX_KEY}
     DEFAULT_GW_KEY = 'default-gw'
 
     def __init__(self, *args, **kwargs):
@@ -110,7 +146,7 @@ class NuvlaEdgeMetrics(Resource):
             return net.get(self.DEFAULT_GW_KEY)
         return None
 
-    def default_gw_data(self) -> dict:
+    def _default_gw_data(self) -> dict:
         gw_name = self.default_gw_name()
         if gw_name:
             for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
@@ -118,29 +154,51 @@ class NuvlaEdgeMetrics(Resource):
                     return v
         return {}
 
-    def _default_gw_txrx(self, kind) -> dict:
-        gw = self.default_gw_data()
+    def _is_rxtx_kind(self, kind: str):
+        if kind not in self.RXTX_KINDS:
+            msg = f'Wrong Rx/Tx kind {kind}. Allowed {self.RXTX_KINDS}'
+            log.error(msg)
+            raise ValueError(msg)
+
+    def _default_gw_rxtx(self, kind: str) -> NENetMetric:
+        """
+        Get Rx or Tx network metrics for default gateway.
+
+        :param kind: rx or tx
+        :return:
+        """
+        gw = self._default_gw_data()
         if gw:
-            return {'interface': gw['interface'],
-                    'value': gw[kind]}
-        return {}
+            return self._from_metrics_data(kind, gw)
+        return NENetMetric()
 
-    def default_gw_tx(self) -> dict:
-        return self._default_gw_txrx(self.NET_TX_KEY)
+    def default_gw_tx(self) -> NENetMetric:
+        return self._default_gw_rxtx(self.TX_KIND)
 
-    def default_gw_rx(self) -> dict:
-        return self._default_gw_txrx(self.NET_RX_KEY)
+    def default_gw_rx(self) -> NENetMetric:
+        return self._default_gw_rxtx(self.RX_KIND)
 
-    def net_rx_all(self) -> list:
-        res = []
+    def _net_rxtx_all(self, kind: str) -> List[NENetMetric]:
+        """
+        Get Rx or Tx network metrics for all network interfaces.
+
+        :param kind: rx or tx
+        :return:
+        """
+        self._is_rxtx_kind(kind)
+        res: List[NENetMetric] = []
         for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
-            res.append({'interface': v.get('interface'),
-                        'value': v.get(self.NET_RX_KEY)})
+            res.append(self._from_metrics_data(kind, v))
         return res
 
-    def net_tx_all(self) -> list:
-        res = []
-        for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
-            res.append({'interface': v.get('interface'),
-                        'value': v.get(self.NET_TX_KEY)})
-        return res
+    def net_rx_all(self) -> List[NENetMetric]:
+        return self._net_rxtx_all(self.RX_KIND)
+
+    def net_tx_all(self) -> List[NENetMetric]:
+        return self._net_rxtx_all(self.TX_KIND)
+
+    def _from_metrics_data(self, kind: str, net_metrics: dict) -> NENetMetric:
+        return NENetMetric({'id': self['id'],
+                            'kind': kind,
+                            'iface': net_metrics['interface'],
+                            'value': net_metrics[self.NET_RXTX_KEY_MAP[kind]]})

@@ -1,9 +1,9 @@
 import unittest
 
-from nuvla.notifs.matcher import NuvlaEdgeSubsConfMatcher
+from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder
-from nuvla.notifs.subscription import SubscriptionConfig
+from nuvla.notifs.subscription import SubscriptionCfg
 
 user = 'user/00000000-0000-0000-0000-000000000000'
 
@@ -11,7 +11,7 @@ user = 'user/00000000-0000-0000-0000-000000000000'
 class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
 
     def test_builder_numeric_network(self):
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subscription-config/11111111-2222-3333-4444-555555555555',
             'name': 'nb Rx',
             'description': 'nb network cumulative Rx over 30 days',
@@ -84,7 +84,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                 'value': 123} == notif
 
     def test_builder_ne_onoff(self):
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subscription-config/01',
             'name': 'ne on/off',
             'description': 'ne on/off',
@@ -113,7 +113,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        nescm = NuvlaEdgeSubsConfMatcher(metrics)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED_RECOVERY)
         assert res['method_ids'] == sc.get('method-ids')
         assert res['subs_description'] == sc.get('description')
@@ -135,7 +135,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        nescm = NuvlaEdgeSubsConfMatcher(metrics)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED)
         assert res['method_ids'] == sc.get('method-ids')
         assert res['subs_description'] == sc.get('description')

@@ -1,7 +1,7 @@
 import unittest
 
 from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound, \
-    EX_MSG_TMPL_KEY_NOT_FOUND
+    EX_MSG_TMPL_KEY_NOT_FOUND, NENetMetric
 
 
 class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
@@ -76,7 +76,7 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
                               {'interface': 'lo',
                                'bytes-transmitted': 1,
                                'bytes-received': 2}]}})
-        assert {} == nerm.default_gw_data()
+        assert {} == nerm._default_gw_data()
 
         nerm = NuvlaEdgeMetrics({
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'foo'},
@@ -85,7 +85,7 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
                               {'interface': 'lo',
                                'bytes-transmitted': 1,
                                'bytes-received': 2}]}})
-        assert {} == nerm.default_gw_data()
+        assert {} == nerm._default_gw_data()
 
         gw = {'interface': 'eth0',
               'bytes-transmitted': 1,
@@ -98,13 +98,14 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
                               {'interface': 'lo',
                                'bytes-transmitted': 1,
                                'bytes-received': 2}]}})
-        assert {} == nerm.default_gw_data()
+        assert {} == nerm._default_gw_data()
 
         gw_name = 'eth0'
         gw = {'interface': gw_name,
               'bytes-transmitted': 1,
               'bytes-received': 2}
         nerm = NuvlaEdgeMetrics({
+            'ID': '1-2-3-4-5',
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: gw_name},
             'RESOURCES': {'CPU': {'load': 4.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
@@ -112,6 +113,36 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
                               {'interface': 'lo',
                                'bytes-transmitted': 1,
                                'bytes-received': 2}]}})
-        assert gw == nerm.default_gw_data()
-        assert {'interface': gw_name, 'value': 1} == nerm.default_gw_tx()
-        assert {'interface': gw_name, 'value': 2} == nerm.default_gw_rx()
+        assert gw == nerm._default_gw_data()
+        assert {'id': '1-2-3-4-5',
+                'iface': gw_name,
+                'kind': 'tx',
+                'value': 1} == nerm.default_gw_tx()
+        assert {'id': '1-2-3-4-5',
+                'iface': gw_name,
+                'kind': 'rx',
+                'value': 2} == nerm.default_gw_rx()
+
+
+class TestNENetMetric(unittest.TestCase):
+
+    def test_assert_input(self):
+
+        metrcis = NENetMetric({'id': '1',
+                               'kind': 'rx',
+                               'iface': 'eth0',
+                               'value': 1})
+        assert '1' == metrcis.id()
+        assert 'rx' == metrcis.kind()
+        assert 'eth0' == metrcis.iface()
+        assert 1 == metrcis.value()
+
+        self.assertRaises(AssertionError, NENetMetric)
+        with self.assertRaises(AssertionError):
+            NENetMetric({'foo': 'bar'})
+
+        self.assertRaises(AssertionError, NENetMetric)
+        with self.assertRaises(AssertionError):
+            NENetMetric({'id': '1',
+                         'kind': 'rx',
+                         'iface': 'eth0'})

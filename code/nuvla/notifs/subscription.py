@@ -17,13 +17,22 @@ log = get_logger('main')
 
 SUBS_CONF_TOPIC = 'subscription-config'
 
+RESOURCE_KIND_NE = 'nuvlabox'
+RESOURCE_KIND_EVENT = 'event'
+RESOURCE_KIND_DATARECORD = 'data-record'
+RESOURCE_KINDS = [v for k, v in globals().items() if
+                  k.startswith('RESOURCE_KIND_')]
 
-class SubscriptionConfig(dict):
+
+class SubscriptionCfg(dict):
     """
     Dictionary holding notification subscription configuration. Contains helper
     methods for easier data access and predicates to checking states and
     internal conditions.
     """
+
+    KEY_RESET_INTERVAL = 'reset-interval'
+    KEY_RESET_START_DAY = 'reset-start-date'
 
     def __init__(self, *args, **kwargs):
         dict.__init__(self, *args, **kwargs)
@@ -50,11 +59,11 @@ class SubscriptionConfig(dict):
     def criteria_dev_name(self) -> str:
         return self['criteria'].get('dev-name')
 
-    def criteria_reset_interval(self):
-        return self['criteria'].get('reset-interval')
+    def criteria_reset_interval(self) -> Union[None, str]:
+        return self['criteria'].get(self.KEY_RESET_INTERVAL)
 
-    def criteria_reset_start_date(self):
-        return self['criteria'].get('reset-start-date')
+    def criteria_reset_start_date(self) -> Union[None, int]:
+        return self['criteria'].get(self.KEY_RESET_START_DAY)
 
     def _owner(self):
         owners = self.get('acl', {}).get('owners', [])
@@ -91,6 +100,9 @@ class SubscriptionConfig(dict):
             return bool(
                 set(self._tags_from_resource_filter()).intersection(set(tags)))
         return False
+
+    def resource_kind(self) -> str:
+        return self.get('resource-kind')
 
 
 class LoggingDict(dict):
@@ -188,6 +200,8 @@ class SelfUpdatingDict(LoggingDict):
                 del self[k][key]
         else:
             rk = value.get('resource-kind')
+            if rk not in RESOURCE_KINDS:
+                self._resource_kind_not_known(rk)
             if rk in self:
                 self[rk].update({key: self._sub_dict_class(value)})
             else:
@@ -214,3 +228,25 @@ class SelfUpdatingDict(LoggingDict):
             if time.time() >= t_end:
                 raise Exception(f'Timed out waiting {key} to be set.')
             time.sleep(0.1)
+
+    def wait_keys_set(self, keys=None):
+        if keys is None:
+            keys = RESOURCE_KINDS
+        for k in keys:
+            self.wait_key_set(k)
+
+    def get_resource_kind_values(self, rk: str) -> List[SubscriptionCfg]:
+        if rk in self:
+            return self.get(rk).values()
+        else:
+            self._resource_kind_not_known(rk)
+            return []
+
+    def _resource_kind_not_known(self, rk: str):
+        log.warning('Resource kind %s not known in %s', rk, RESOURCE_KINDS)
+
+
+class SelfUpdatingSubsCfgs(SelfUpdatingDict):
+
+    def __init__(self, name, updater: DictUpdater, *args, **kwargs):
+        super().__init__(name, updater, SubscriptionCfg, *args, **kwargs)

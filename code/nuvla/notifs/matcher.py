@@ -13,17 +13,17 @@ from nuvla.notifs.metric import NuvlaEdgeMetrics, \
 from nuvla.notifs.resource import Resource
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
     NuvlaEdgeNotification
-from nuvla.notifs.subscription import SubscriptionConfig
+from nuvla.notifs.subscription import SubscriptionCfg
 
 log = get_logger('matcher')
 
 
-def ge(val, sc: SubscriptionConfig) -> bool:
+def ge(val, sc: SubscriptionCfg) -> bool:
     """greater than or equal"""
     return val and val >= sc.criteria_value()
 
 
-def le(val, sc: SubscriptionConfig) -> bool:
+def le(val, sc: SubscriptionCfg) -> bool:
     """less than or equal"""
     return val and val <= sc.criteria_value()
 
@@ -31,7 +31,7 @@ def le(val, sc: SubscriptionConfig) -> bool:
 NETWORK_METRIC_PREFIX = 'network-'
 
 
-class ResourceSubsConfigMatcher:
+class ResourceSubsCfgMatcher:
     """
     Helper methods to check if subscription configurations are subscribed to
     a resource.
@@ -39,30 +39,34 @@ class ResourceSubsConfigMatcher:
 
     @classmethod
     def resource_subscribed(cls, resource: Resource,
-                            subs_conf: SubscriptionConfig) -> bool:
-        return subs_conf.is_enabled() and \
-               subs_conf.can_view_resource(
+                            subs_cfg: SubscriptionCfg,
+                            with_disabled=False) -> bool:
+        if with_disabled:
+            return subs_cfg.can_view_resource(
+                resource.get('acl', resource.get('ACL', {})))
+        return subs_cfg.is_enabled() and \
+               subs_cfg.can_view_resource(
                    resource.get('acl', resource.get('ACL', {})))
 
     @classmethod
     def resource_subscriptions(cls, resource: Resource,
-                               subs_confs: List[SubscriptionConfig]) -> \
-            Iterator[SubscriptionConfig]:
-        subs_confs_subscribed = []
-        for subs_conf in subs_confs:
-            if cls.resource_subscribed(resource, subs_conf):
-                subs_confs_subscribed.append(subs_conf)
-        return subs_confs_subscribed
+                               subs_cfgs: List[SubscriptionCfg]) -> \
+            List[SubscriptionCfg]:
+        subs_cfgs_subscribed = []
+        for subs_cfg in subs_cfgs:
+            if cls.resource_subscribed(resource, subs_cfg):
+                subs_cfgs_subscribed.append(subs_cfg)
+        return subs_cfgs_subscribed
 
     @classmethod
     def resource_subscriptions_ids(cls, resource: Resource,
-                                   subs_confs: List[SubscriptionConfig]) \
+                                   subs_cfgs: List[SubscriptionCfg]) \
             -> List[str]:
         return [sc['id'] for sc in
-                cls.resource_subscriptions(resource, subs_confs)]
+                cls.resource_subscriptions(resource, subs_cfgs)]
 
 
-class TaggedResourceSubsConfigMatcher(ResourceSubsConfigMatcher):
+class TaggedResourceSubsCfgMatcher(ResourceSubsCfgMatcher):
     """
     Helper methods to check if subscription configurations are subscribed to
     a tagged resource.
@@ -73,13 +77,15 @@ class TaggedResourceSubsConfigMatcher(ResourceSubsConfigMatcher):
 
     @classmethod
     def resource_subscribed(cls, resource: Resource,
-                            subs_conf: SubscriptionConfig) -> bool:
-        return super().resource_subscribed(resource, subs_conf) and \
-               subs_conf.tags_match(
+                            subs_cfg: SubscriptionCfg,
+                            with_disabled=False) -> bool:
+        return super().resource_subscribed(resource, subs_cfg,
+                                           with_disabled) and \
+               subs_cfg.tags_match(
                    resource.get('tags', resource.get('TAGS', [])))
 
 
-class TaggedResourceNetSubsConfigMatcher(TaggedResourceSubsConfigMatcher):
+class TaggedResourceNetworkSubsCfgMatcher(TaggedResourceSubsCfgMatcher):
     """
     Helper methods to check if subscription configurations are subscribed to
     networking metrics on a tagged resource.
@@ -90,9 +96,11 @@ class TaggedResourceNetSubsConfigMatcher(TaggedResourceSubsConfigMatcher):
 
     @classmethod
     def resource_subscribed(cls, resource: Resource,
-                            subs_conf: SubscriptionConfig) -> bool:
-        return super().resource_subscribed(resource, subs_conf) and \
-               subs_conf.criteria_metric().startswith(NETWORK_METRIC_PREFIX)
+                            subs_cfg: SubscriptionCfg,
+                            with_disabled=True) -> bool:
+        return super().resource_subscribed(resource, subs_cfg,
+                                           with_disabled) and \
+               subs_cfg.criteria_metric().startswith(NETWORK_METRIC_PREFIX)
 
 
 def metric_not_found_ex_handler(func):
@@ -102,10 +110,11 @@ def metric_not_found_ex_handler(func):
         except MetricNotFound as ex:
             log.warning('Metric not found due to: %s', ex)
             return None
+
     return wrapper
 
 
-class NuvlaEdgeSubsConfMatcher:
+class NuvlaEdgeSubsCfgMatcher:
     """
     Given `metrics` from NuvlaEdge, matches them against user provided criteria
     defined in subscription configs.
@@ -116,25 +125,28 @@ class NuvlaEdgeSubsConfMatcher:
     MATCHED_RECOVERY = {'matched': True,
                         'recovery': True}
 
-    def __init__(self, metrics: NuvlaEdgeMetrics, net_db: Union[None, RxTxDB] = None):
+    def __init__(self, metrics: NuvlaEdgeMetrics,
+                 net_db: Union[None, RxTxDB] = None):
         self._m: NuvlaEdgeMetrics = metrics
         self._net_db: RxTxDB = net_db
-        self._trscm = TaggedResourceSubsConfigMatcher()
+        self._trscm = TaggedResourceSubsCfgMatcher()
 
     def metrics_id(self) -> str:
         return self._m.get('id')
 
-    def _load_moved_above_thld(self, sc: SubscriptionConfig):
+    def _load_moved_above_thld(self, sc: SubscriptionCfg):
         return self._m.load_pct_prev() <= sc.criteria_value() < self._m.load_pct_curr()
 
-    def _load_moved_below_thld(self, sc: SubscriptionConfig):
+    def _load_moved_below_thld(self, sc: SubscriptionCfg):
         return self._m.load_pct_curr() < sc.criteria_value() <= self._m.load_pct_prev()
 
-    def _load_moved_over_thld(self, sc: SubscriptionConfig):
-        return self._load_moved_above_thld(sc) or self._load_moved_below_thld(sc)
+    def _load_moved_over_thld(self, sc: SubscriptionCfg):
+        return self._load_moved_above_thld(sc) or self._load_moved_below_thld(
+            sc)
 
     @metric_not_found_ex_handler
-    def match_load(self, sc: SubscriptionConfig) -> Union[None, Dict[str, bool]]:
+    def match_load(self, sc: SubscriptionCfg) -> Union[
+        None, Dict[str, bool]]:
         if sc.is_metric_cond('load', '>'):
             if self._load_moved_above_thld(sc):
                 return self.MATCHED
@@ -147,14 +159,14 @@ class NuvlaEdgeSubsConfMatcher:
                 return self.MATCHED_RECOVERY
         return None
 
-    def _ram_moved_above_thld(self, sc: SubscriptionConfig):
+    def _ram_moved_above_thld(self, sc: SubscriptionCfg):
         return self._m.ram_pct_prev() <= sc.criteria_value() < self._m.ram_pct_curr()
 
-    def _ram_moved_below_thld(self, sc: SubscriptionConfig):
+    def _ram_moved_below_thld(self, sc: SubscriptionCfg):
         return self._m.ram_pct_curr() < sc.criteria_value() <= self._m.ram_pct_prev()
 
     @metric_not_found_ex_handler
-    def match_ram(self, sc: SubscriptionConfig) -> Union[None, Dict[str, bool]]:
+    def match_ram(self, sc: SubscriptionCfg) -> Union[None, Dict[str, bool]]:
         if sc.is_metric_cond('ram', '>'):
             if self._ram_moved_above_thld(sc):
                 return self.MATCHED
@@ -167,26 +179,28 @@ class NuvlaEdgeSubsConfMatcher:
                 return self.MATCHED_RECOVERY
         return None
 
-    def disk_pct_curr(self, sc: SubscriptionConfig):
+    def disk_pct_curr(self, sc: SubscriptionCfg):
         return self._m.disk_pct_curr(sc.criteria_dev_name())
 
-    def disk_pct_prev(self, sc: SubscriptionConfig):
+    def disk_pct_prev(self, sc: SubscriptionCfg):
         return self._m.disk_pct_prev(sc.criteria_dev_name())
 
-    def _disk_moved_above_thld(self, sc: SubscriptionConfig) -> Union[None, float]:
+    def _disk_moved_above_thld(self, sc: SubscriptionCfg) -> Union[
+        None, float]:
         prev = self.disk_pct_prev(sc)
         curr = self.disk_pct_curr(sc)
         if prev and curr:
             return prev <= sc.criteria_value() < curr
 
-    def _disk_moved_below_thld(self, sc: SubscriptionConfig):
+    def _disk_moved_below_thld(self, sc: SubscriptionCfg):
         prev = self.disk_pct_prev(sc)
         curr = self.disk_pct_curr(sc)
         if prev and curr:
             return curr < sc.criteria_value() <= prev
 
     @metric_not_found_ex_handler
-    def match_disk(self, sc: SubscriptionConfig) -> Union[None, Dict[str, bool]]:
+    def match_disk(self, sc: SubscriptionCfg) -> Union[
+        None, Dict[str, bool]]:
         if sc.is_metric_cond('disk', '>'):
             if self._disk_moved_above_thld(sc):
                 return self.MATCHED
@@ -199,48 +213,48 @@ class NuvlaEdgeSubsConfMatcher:
                 return self.MATCHED_RECOVERY
         return None
 
-    def network_rx_above_thld(self, sc: SubscriptionConfig) -> Union[None, Dict]:
+    def network_rx_above_thld(self, sc: SubscriptionCfg) -> Union[None, Dict]:
         return self._network_rxtx_above_thld(sc, 'rx')
 
-    def network_tx_above_thld(self, sc: SubscriptionConfig) -> Union[None, Dict]:
+    def network_tx_above_thld(self, sc: SubscriptionCfg) -> Union[None, Dict]:
         return self._network_rxtx_above_thld(sc, 'tx')
 
-    def get_rxtx_gb(self, subs_conf: SubscriptionConfig, dev_name, kind) -> \
+    def get_rxtx_gb(self, subs_cfg: SubscriptionCfg, dev_name, kind) -> \
             Union[None, int]:
         if self._net_db is None:
             log.debug('network db not defined ... return')
             return None
         if kind == 'rx':
-            return self._net_db.get_rx_gb(subs_conf['id'], self.metrics_id(),
+            return self._net_db.get_rx_gb(subs_cfg['id'], self.metrics_id(),
                                           dev_name)
         if kind == 'tx':
-            return self._net_db.get_tx_gb(subs_conf['id'], self.metrics_id(),
+            return self._net_db.get_tx_gb(subs_cfg['id'], self.metrics_id(),
                                           dev_name)
         return None
 
-    def is_rxtx_above_thld(self, sc: SubscriptionConfig, iface, kind) -> bool:
+    def is_rxtx_above_thld(self, sc: SubscriptionCfg, iface, kind) -> bool:
         if self._net_db is None:
             log.debug('net db not defined ... return')
             return False
         return self._net_db.get_above_thld(sc['id'], self.metrics_id(), iface,
                                            kind)
 
-    def set_rxtx_above_thld(self, sc: SubscriptionConfig, iface, kind):
+    def set_rxtx_above_thld(self, sc: SubscriptionCfg, iface, kind):
         if self._net_db is None:
             log.debug('net db not defined ... return')
             return
         self._net_db.set_above_thld(sc['id'], self.metrics_id(), iface, kind)
 
-    def reset_rxtx_above_thld(self, sc: SubscriptionConfig, iface, kind):
+    def reset_rxtx_above_thld(self, sc: SubscriptionCfg, iface, kind):
         if self._net_db is None:
             log.debug('net db not defined ... return')
             return
         self._net_db.reset_above_thld(sc['id'], self.metrics_id(), iface, kind)
 
-    def network_device_name(self, sc: SubscriptionConfig) -> Union[None, str]:
+    def network_device_name(self, sc: SubscriptionCfg) -> Union[None, str]:
         return sc.criteria_dev_name() or self._m.default_gw_name()
 
-    def _network_rxtx_above_thld(self, sc: SubscriptionConfig, kind: str) -> \
+    def _network_rxtx_above_thld(self, sc: SubscriptionCfg, kind: str) -> \
             Union[None, Dict]:
 
         if kind not in ['rx', 'tx']:
@@ -285,7 +299,7 @@ class NuvlaEdgeSubsConfMatcher:
             return True
         return False
 
-    def match_online(self, sc: SubscriptionConfig) -> Union[None, Dict]:
+    def match_online(self, sc: SubscriptionCfg) -> Union[None, Dict]:
         if sc.is_metric_cond('state', 'no'):
             if self._went_offline():
                 return self.MATCHED
@@ -293,7 +307,7 @@ class NuvlaEdgeSubsConfMatcher:
                 return self.MATCHED_RECOVERY
         return None
 
-    def notif_build_net_rx(self, sc: SubscriptionConfig,
+    def notif_build_net_rx(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
             .name(f'{res_m["interface"]} Rx above') \
@@ -301,7 +315,7 @@ class NuvlaEdgeSubsConfMatcher:
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_net_tx(self, sc: SubscriptionConfig,
+    def notif_build_net_tx(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
             .name(f'{res_m["interface"]} Tx above') \
@@ -309,7 +323,7 @@ class NuvlaEdgeSubsConfMatcher:
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_load(self, sc: SubscriptionConfig,
+    def notif_build_load(self, sc: SubscriptionCfg,
                          res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
             .name('NE load %') \
@@ -317,7 +331,7 @@ class NuvlaEdgeSubsConfMatcher:
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_ram(self, sc: SubscriptionConfig,
+    def notif_build_ram(self, sc: SubscriptionCfg,
                         res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
             .name('NE ram %') \
@@ -325,7 +339,7 @@ class NuvlaEdgeSubsConfMatcher:
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_disk(self, sc: SubscriptionConfig,
+    def notif_build_disk(self, sc: SubscriptionCfg,
                          res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
             .name('NE disk %') \
@@ -333,7 +347,7 @@ class NuvlaEdgeSubsConfMatcher:
             .recovery(res_m.get('recovery', False)) \
             .build()
 
-    def notif_build_online(self, sc: SubscriptionConfig,
+    def notif_build_online(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
             .name('NE online') \
@@ -343,13 +357,13 @@ class NuvlaEdgeSubsConfMatcher:
             .condition_value('') \
             .build()
 
-    def resource_subscriptions(self, subs_confs: List[SubscriptionConfig]) -> \
-            List[SubscriptionConfig]:
-        return list(self._trscm.resource_subscriptions(self._m, subs_confs))
+    def resource_subscriptions(self, subs_cfgs: List[SubscriptionCfg]) -> \
+            List[SubscriptionCfg]:
+        return list(self._trscm.resource_subscriptions(self._m, subs_cfgs))
 
-    def match_all(self, subs_confs: List[SubscriptionConfig]) -> List[Dict]:
+    def match_all(self, subs_cfgs: List[SubscriptionCfg]) -> List[Dict]:
         res = []
-        subs_on_resource = self.resource_subscriptions(subs_confs)
+        subs_on_resource = self.resource_subscriptions(subs_cfgs)
         log.debug('Active subscriptions on %s: %s',
                   self.metrics_id(), [x.get('id') for x in subs_on_resource])
         for sc in subs_on_resource:
