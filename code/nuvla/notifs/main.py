@@ -3,6 +3,7 @@ Module implementing the main application logic and providing main() procedure.
 """
 
 from pprint import pformat
+from datetime import datetime
 import os
 import signal
 import time
@@ -68,13 +69,9 @@ def ne_telem_process(metrics: dict, subs_cfgs: List[SubscriptionCfg],
 
     populate_ne_net_db(net_db, nerm, subs_cfgs)
 
-    if subs_cfgs.get(RESOURCE_KIND_NE):
-        notifs = NuvlaEdgeSubsCfgMatcher(nerm, net_db).match_all(subs_cfgs)
-        log.info('To notify: %s', notifs)
-        notif_publisher.publish_list(notifs, NOTIF_TOPIC)
-    else:
-        log.warning('No %s subscriptions. Dropped: %s', RESOURCE_KIND_NE,
-                    metrics)
+    notifs = NuvlaEdgeSubsCfgMatcher(nerm, net_db).match_all(subs_cfgs)
+    log.info('To notify: %s', notifs)
+    notif_publisher.publish_list(notifs, NOTIF_TOPIC)
 
 
 def wait_sc_populated(subs_cfgs: SelfUpdatingSubsCfgs, resource_kind: str,
@@ -108,7 +105,7 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
         try:
             msg.value['id'] = msg.key
             ne_telem_process(msg.value,
-                             list(subs_cfgs.get(RESOURCE_KIND_NE).values()),
+                             list(subs_cfgs.get(RESOURCE_KIND_NE, {}).values()),
                              net_db, notif_publisher)
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
@@ -123,6 +120,12 @@ def subs_notif_data_record(subs_cfgs: SelfUpdatingSubsCfgs):
 def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
     wait_sc_populated(subs_cfgs, RESOURCE_KIND_EVENT, timeout=60)
     log.info(f'Starting {RESOURCE_KIND_EVENT} processing...')
+
+
+def local_time():
+    while True:
+        log.info('Current time: %s', datetime.now().isoformat())
+        time.sleep(5)
 
 
 def main():
@@ -140,8 +143,10 @@ def main():
                           daemon=True)
     t3 = threading.Thread(target=subs_notif_event, args=(dyn_subs_cfgs,),
                           daemon=True)
+    t4 = threading.Thread(target=local_time, daemon=True)
     t1.start()
     t2.start()
     t3.start()
+    t4.start()
     while True:
         time.sleep(5)

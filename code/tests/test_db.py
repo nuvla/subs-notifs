@@ -1,4 +1,3 @@
-import random
 from datetime import datetime, timedelta
 
 from mock import Mock
@@ -6,17 +5,23 @@ import unittest
 
 import elasticsearch
 
-from es_patch import es_update, es_index_create
-import elasticmock.fake_elasticsearch
-
 from nuvla.notifs.metric import NENetMetric
 from nuvla.notifs.subscription import SubscriptionCfg
 
+from es_patch import es_update
+import elasticmock.fake_elasticsearch
 elasticmock.fake_elasticsearch.FakeElasticsearch.update = es_update
+
+from es_patch import es_index_create
 import elasticmock.fake_indices
 elasticmock.fake_indices.FakeIndicesClient.create = es_index_create
 
-from elasticmock import elasticmock
+from es_patch import es_index_put_mapping
+import elasticmock.fake_indices
+elasticmock.fake_indices.FakeIndicesClient.put_mapping = es_index_put_mapping
+
+from es_patch import get_elasticmock
+elasticmock = get_elasticmock()
 
 import nuvla.notifs.window as window
 window_now_orig = datetime.now
@@ -82,7 +87,12 @@ class TestRxTxDriverESMockedBase(unittest.TestCase):
     @elasticmock
     def setUp(self):
         self.driver: RxTxDriverES = RxTxDriverES()
-        self.driver.connect()
+        self.driver.index_delete()
+        try:
+            self.driver.connect()
+        except Exception as ex:
+            self.driver.index_delete()
+            raise ex
 
     @elasticmock
     def tearDown(self):
@@ -94,6 +104,10 @@ class TestRxTxDriverESMockedBase(unittest.TestCase):
 
 
 class TestRxTxDriverESMockedCreateIndex(unittest.TestCase):
+
+    @elasticmock
+    def setUp(self):
+        RxTxDriverES().index_delete()
 
     @elasticmock
     def test_successive_create_index_throws(self):
@@ -117,7 +131,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
     @elasticmock
     def test_init(self):
         assert self.driver.es is not None
-        assert [] == self.driver._index_all_docs()
+        assert [] == self.driver.index_all_docs()
 
     def test_set_get_basic(self):
         subs_id = 'subscription/01'
@@ -134,7 +148,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                                           'value': value}))
         self.driver.set(rx_entry)
 
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id, ne_id, 'foo', 'bar')
         assert rxtx is None
@@ -165,7 +179,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                          'kind': kind,
                          'value': value}))
         self.driver.set(rx_entry)
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id_1, ne_id, iface, kind)
         assert rxtx is not None
@@ -185,7 +199,8 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                          'kind': kind,
                          'value': value}))
         self.driver.set(rx_entry)
-        assert 2 == len(self.driver._index_all_docs())
+        print(self.driver.index_count())
+        assert 2 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id_2, ne_id, iface, kind)
         assert rxtx is not None
@@ -208,7 +223,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                                           'kind': kind,
                                           'value': value}))
         self.driver.set(rx_entry)
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
         rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None
         assert 0 == rxtx.total()
@@ -217,7 +232,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
 
         doc = self.driver._doc_build(rx_entry)
         self.driver._insert(doc)
-        assert 2 == len(self.driver._index_all_docs())
+        assert 2 == self.driver.index_count()
         self.assertRaises(DBInconsistentStateError, self.driver.get_data,
                           *(subs_id, ne_id, iface, kind))
 
@@ -239,7 +254,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                                           'kind': kind,
                                           'value': 1}))
         self.driver.set(rx_entry)
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
         rx_validate(rx, 0)
@@ -251,7 +266,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                                           'kind': kind,
                                           'value': 2}))
         self.driver.set(rx_entry)
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
         rx_validate(rx, 1)
@@ -267,7 +282,7 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                                           'kind': kind,
                                           'value': 10}))
         self.driver.set(rx_entry)
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rx = self.driver.get_data(subs_id, ne_id, iface, kind)
         rx_validate(rx, 0)
@@ -299,7 +314,7 @@ class TestRxTxDriverESWithWindow(TestRxTxDriverESMockedBase):
         window.now = Mock(return_value=datetime.now().replace(day=current_day))
 
         self.driver.set(rxtx_entry_from_value(1))
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None
@@ -310,7 +325,7 @@ class TestRxTxDriverESWithWindow(TestRxTxDriverESMockedBase):
         assert reset_day == rxtx.window.month_day
 
         self.driver.set(rxtx_entry_from_value(2))
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None
@@ -326,7 +341,7 @@ class TestRxTxDriverESWithWindow(TestRxTxDriverESMockedBase):
         assert reset_day + 1 == window.now().day
 
         self.driver.set(rxtx_entry_from_value(3))
-        assert 1 == len(self.driver._index_all_docs())
+        assert 1 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id, ne_id, iface, kind)
         assert rxtx is not None

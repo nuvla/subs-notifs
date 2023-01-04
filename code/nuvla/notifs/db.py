@@ -87,6 +87,7 @@ class RxTxDriverES:
 
     INDEX_NAME = 'subsnotifs-rxtx'
     HOSTS = [{'host': 'localhost', 'port': 9200}]
+    RESULT_WINDOW = 10000
 
     def __init__(self, hosts:Union[None, list] = None):
         """
@@ -97,9 +98,29 @@ class RxTxDriverES:
     def index_create(self, index=None):
         self.es.indices.create(index=index or self.INDEX_NAME)
 
+    def mapping_create(self):
+        body = {
+            'properties': {
+                'subs_id': {
+                    'type': 'keyword'
+                },
+                'ne_id': {
+                    'type': 'keyword'
+                },
+                'iface': {
+                    'type': 'keyword'
+                },
+                'kind': {
+                    'type': 'keyword'
+                }
+            }
+        }
+        self.es.indices.put_mapping(body, index=self.INDEX_NAME)
+
     def connect(self):
         try:
             self.index_create(self.INDEX_NAME)
+            self.mapping_create()
         except elasticsearch.exceptions.RequestError as ex:
             if ex.status_code == 400 and \
                     ex.error == 'resource_already_exists_exception':
@@ -108,34 +129,45 @@ class RxTxDriverES:
                 raise ex
 
     def index_delete(self, index=None):
-        self.es.indices.delete(index=index or self.INDEX_NAME)
+        try:
+            self.es.indices.delete(index=index or self.INDEX_NAME)
+        except elasticsearch.exceptions.NotFoundError:
+            log.warning('Deleting index: no such index %s', self.INDEX_NAME)
 
     def close(self):
         self.es = None
 
     def is_connected(self) -> bool:
         try:
-            res = self.es.info()
+            self.es.info()
+            return True
         except Exception as ex:
             log.warning('Driver is not connected to DB: %s', ex)
             return False
-        return 200 == res.get('status')
+
+    def index_count(self) -> int:
+        return self.es.count(index=self.INDEX_NAME).get('count', 0)
 
     def _index_content(self) -> dict:
         return self.es.search(index=self.INDEX_NAME,
+                              size=self.RESULT_WINDOW,
                               body={'query': {'match_all': {}}})
 
-    def _index_all_docs(self) -> dict:
+    def index_all_docs(self) -> dict:
         return self._index_content()['hits']['hits']
 
     def _find(self, query) -> dict:
-        return self.es.search(index=self.INDEX_NAME, body=query)
+        return self.es.search(index=self.INDEX_NAME,
+                              from_=0,
+                              sort=[],
+                              size=self.RESULT_WINDOW,
+                              body=query)
 
     def _data_query(self, subs_id, ne_id, iface, kind) -> dict:
         return {
             'query': {
                 'bool': {
-                    'filter': [
+                    'must': [
                         {'term': {'subs_id': subs_id}},
                         {'term': {'ne_id': ne_id}},
                         {'term': {'iface': iface}},
@@ -285,7 +317,7 @@ class RxTxDriverES:
                              self._rxtx_serialize(rxtx))
 
     def __len__(self) -> int:
-        return len(self._index_all_docs())
+        return len(self.index_all_docs())
 
 
 class RxTxDB:

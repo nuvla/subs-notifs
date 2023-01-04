@@ -1,7 +1,12 @@
 import os
 import unittest
 
-from elasticmock import elasticmock
+from es_patch import es_index_put_mapping
+import elasticmock.fake_indices
+elasticmock.fake_indices.FakeIndicesClient.put_mapping = es_index_put_mapping
+
+from es_patch import get_elasticmock
+elasticmock = get_elasticmock()
 
 from fake_updater import get_updater
 from nuvla.notifs.main import es_hosts, ES_HOSTS, populate_ne_net_db
