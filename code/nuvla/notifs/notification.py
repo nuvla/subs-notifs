@@ -42,7 +42,7 @@ class NuvlaEdgeNotification(dict):
                           'method_ids': sc['method-ids'],
                           'subs_description': sc['description'],
                           'condition': sc['criteria']['condition'],
-                          'condition_value': str(sc['criteria']['value']),
+                          'condition_value': str(sc['criteria'].get('value', '')),
                           'resource_name': metrics.name(),
                           'resource_description': metrics.description(),
                           'resource_uri': f'edge/{metrics.uuid()}',

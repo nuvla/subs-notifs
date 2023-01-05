@@ -2,7 +2,8 @@ import unittest
 
 from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
-from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder
+from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
+    NuvlaEdgeNotification
 from nuvla.notifs.subscription import SubscriptionCfg
 
 user = 'user/00000000-0000-0000-0000-000000000000'
@@ -144,3 +145,27 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert res['recovery'] is False
         assert res['value'] == ''
         assert res['condition_value'] == ''
+
+
+class TestNuvlaEdgeNotification(unittest.TestCase):
+
+    def test_init_no_value(self):
+        sc = SubscriptionCfg({
+            'id': 'subscription-config/01',
+            'name': 'ne on/off',
+            'description': 'ne on/off',
+            'method-ids': [
+                'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+            ],
+            'criteria': {
+                'metric': 'state',
+                'kind': 'boolean',
+                'condition': 'no'
+            }})
+        metrics = NuvlaEdgeMetrics(
+            {'id': 'nuvlabox/01',
+             'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
+             'DESCRIPTION': 'None - self-registration number 220171415421241',
+             'TIMESTAMP': '2022-08-02T15:21:46Z'})
+        ne_notif = NuvlaEdgeNotification(sc, metrics)
+        assert '' == ne_notif['condition_value']
