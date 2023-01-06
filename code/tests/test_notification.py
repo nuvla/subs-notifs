@@ -1,9 +1,10 @@
 import unittest
 
-from nuvla.notifs.matcher import NuvlaEdgeSubsConfMatcher
-from nuvla.notifs.metric import NuvlaEdgeResourceMetrics
-from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder
-from nuvla.notifs.subscription import SubscriptionConfig
+from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher
+from nuvla.notifs.metric import NuvlaEdgeMetrics
+from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
+    NuvlaEdgeNotification
+from nuvla.notifs.subscription import SubscriptionCfg
 
 user = 'user/00000000-0000-0000-0000-000000000000'
 
@@ -11,7 +12,7 @@ user = 'user/00000000-0000-0000-0000-000000000000'
 class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
 
     def test_builder_numeric_network(self):
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subscription-config/11111111-2222-3333-4444-555555555555',
             'name': 'nb Rx',
             'description': 'nb network cumulative Rx over 30 days',
@@ -30,12 +31,12 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                 'window': 'monthly',
                 'dev-name': 'eth0'
             }})
-        metrics = NuvlaEdgeResourceMetrics(
+        metrics = NuvlaEdgeMetrics(
             {'id': 'nuvlabox/01',
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
              'TAGS': ['arch=x86-64'],
-             'NETWORK': {NuvlaEdgeResourceMetrics.DEFAULT_GW_KEY: 'eth0'},
+             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
              'ONLINE': True,
              'ONLINE_PREV': True,
              'RESOURCES': {'CPU': {'load': 5.52, 'capacity': 4, 'topic': 'cpu'},
@@ -84,7 +85,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                 'value': 123} == notif
 
     def test_builder_ne_onoff(self):
-        sc = SubscriptionConfig({
+        sc = SubscriptionCfg({
             'id': 'subscription-config/01',
             'name': 'ne on/off',
             'description': 'ne on/off',
@@ -101,7 +102,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                 'condition': 'no',
                 'value': 'true'
             }})
-        metrics = NuvlaEdgeResourceMetrics(
+        metrics = NuvlaEdgeMetrics(
             {'id': 'nuvlabox/01',
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
@@ -113,7 +114,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        nescm = NuvlaEdgeSubsConfMatcher(metrics)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED_RECOVERY)
         assert res['method_ids'] == sc.get('method-ids')
         assert res['subs_description'] == sc.get('description')
@@ -123,7 +124,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert res['value'] == ''
         assert res['condition_value'] == ''
 
-        metrics = NuvlaEdgeResourceMetrics(
+        metrics = NuvlaEdgeMetrics(
             {'id': 'nuvlabox/01',
              'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
              'DESCRIPTION': 'None - self-registration number 220171415421241',
@@ -135,7 +136,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
-        nescm = NuvlaEdgeSubsConfMatcher(metrics)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
         res = nescm.notif_build_online(sc, nescm.MATCHED)
         assert res['method_ids'] == sc.get('method-ids')
         assert res['subs_description'] == sc.get('description')
@@ -144,3 +145,27 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert res['recovery'] is False
         assert res['value'] == ''
         assert res['condition_value'] == ''
+
+
+class TestNuvlaEdgeNotification(unittest.TestCase):
+
+    def test_init_no_value(self):
+        sc = SubscriptionCfg({
+            'id': 'subscription-config/01',
+            'name': 'ne on/off',
+            'description': 'ne on/off',
+            'method-ids': [
+                'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+            ],
+            'criteria': {
+                'metric': 'state',
+                'kind': 'boolean',
+                'condition': 'no'
+            }})
+        metrics = NuvlaEdgeMetrics(
+            {'id': 'nuvlabox/01',
+             'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
+             'DESCRIPTION': 'None - self-registration number 220171415421241',
+             'TIMESTAMP': '2022-08-02T15:21:46Z'})
+        ne_notif = NuvlaEdgeNotification(sc, metrics)
+        assert '' == ne_notif['condition_value']

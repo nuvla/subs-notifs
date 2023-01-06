@@ -1,10 +1,11 @@
 import json
 from typing import List, Dict, Union
 
+from nuvla.notifs.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SubscriptionConfig
-from nuvla.notifs.metric import ResourceMetrics
+from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.resource import Resource
 
 log = get_logger('notification')
 
@@ -35,14 +36,14 @@ class NotificationPublisher:
 
 
 class NuvlaEdgeNotification(dict):
-    def __init__(self, sc: SubscriptionConfig, metrics: ResourceMetrics):
+    def __init__(self, sc: SubscriptionCfg, metrics: Resource):
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
                           'method_ids': sc['method-ids'],
                           'subs_description': sc['description'],
                           'condition': sc['criteria']['condition'],
-                          'condition_value': str(sc['criteria']['value']),
+                          'condition_value': str(sc['criteria'].get('value', '')),
                           'resource_name': metrics.name(),
                           'resource_description': metrics.description(),
                           'resource_uri': f'edge/{metrics.uuid()}',
@@ -51,7 +52,7 @@ class NuvlaEdgeNotification(dict):
 
 
 class NuvlaEdgeNotificationBuilder:
-    def __init__(self, sc: SubscriptionConfig, metrics: ResourceMetrics):
+    def __init__(self, sc: SubscriptionCfg, metrics: Resource):
         self._n = NuvlaEdgeNotification(sc, metrics)
 
     def name(self, name: str):
@@ -76,3 +77,22 @@ class NuvlaEdgeNotificationBuilder:
 
     def build(self) -> NuvlaEdgeNotification:
         return self._n
+
+
+class BlackboxEventNotification(dict):
+
+    def __init__(self, sc: SubscriptionCfg, event: Event):
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'method_ids': sc['method-ids'],
+                          'subs_description': sc['description'],
+                          'resource_name': 'blackbox',
+                          'resource_description': 'blackbox',
+                          'resource_uri': f'api/{event.resource_id()}',
+                          'metric': 'content-type',
+                          'condition': sc['criteria']['condition'],
+                          'condition_value': str(sc['criteria'].get('value', '')),
+                          'value': 'true',
+                          'timestamp': event.timestamp().split('.')[0] + 'Z',
+                          'recovery': True})

@@ -1,3 +1,7 @@
+"""
+Apache Kafka driver for the package.
+"""
+
 import json
 import os
 import uuid
@@ -47,6 +51,11 @@ def kafka_producer():
 
 
 class KafkaUpdater(DictUpdater):
+    """
+    Kafka consumer subscribing to requested topic by name and yields {key: value}
+    map of each consumed message.
+    """
+
     def __init__(self, topic_name: str, new_group=True):
         super().__init__()
         self.topic_name = topic_name
