@@ -69,7 +69,7 @@ manifest_args=(${MANIFEST})
 #
 
 unset HISTFILE
-echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
+echo ${SIXSQ_DOCKER_PASSWORD} | docker login -u ${SIXSQ_DOCKER_USERNAME} --password-stdin
 
 #
 # push all generated images
