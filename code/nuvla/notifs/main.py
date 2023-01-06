@@ -6,6 +6,7 @@ from pprint import pformat
 from datetime import datetime
 import os
 import signal
+import socket
 import time
 import threading
 import traceback
@@ -19,13 +20,16 @@ from nuvla.notifs.subscription import SelfUpdatingSubsCfgs, \
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
 from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher, \
-    TaggedResourceNetworkSubsCfgMatcher
+    TaggedResourceNetworkSubsCfgMatcher, EventSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
+from nuvla.notifs.event import Event
 
 log = get_logger('main')
 
 NE_TELEM_TOPIC = os.environ.get('NE_TELEM_TOPIC', 'NUVLAEDGE_STATUS_REKYED_S')
 NE_TELEM_GROUP_ID = NE_TELEM_TOPIC
+EVENTS_TOPIC = os.environ.get('EVENTS_TOPIC', 'event')
+EVENTS_GROUP_ID = EVENTS_TOPIC
 NOTIF_TOPIC = 'NOTIFICATIONS_S'
 DB_FILENAME = '/opt/subs-notifs/subs-notifs.db'
 ES_HOSTS = [{'host': 'es', 'port': 9200}]
@@ -46,6 +50,10 @@ def es_hosts():
     return ES_HOSTS
 
 
+def consumer_id(base='consumer') -> str:
+    return f'{base}-{socket.gethostname()}'
+
+
 def populate_ne_net_db(net_db: RxTxDB, ne_metrics: NuvlaEdgeMetrics,
                        subs_cfgs: List[SubscriptionCfg]):
     """
@@ -63,7 +71,7 @@ def populate_ne_net_db(net_db: RxTxDB, ne_metrics: NuvlaEdgeMetrics,
 
 def ne_telem_process(metrics: dict, subs_cfgs: List[SubscriptionCfg],
                      net_db: RxTxDB, notif_publisher: NotificationPublisher):
-    log.info('Got metrics: %s', metrics)
+    log.info('Got NE metrics: %s', metrics)
 
     nerm = NuvlaEdgeMetrics(metrics)
 
@@ -100,7 +108,7 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
 
     for msg in kafka_consumer(NE_TELEM_TOPIC,
                               group_id=NE_TELEM_GROUP_ID,
-                              client_id=NE_TELEM_GROUP_ID + '-1',
+                              client_id=consumer_id(NE_TELEM_GROUP_ID),
                               auto_offset_reset='latest'):
         try:
             msg.value['id'] = msg.key
@@ -117,9 +125,37 @@ def subs_notif_data_record(subs_cfgs: SelfUpdatingSubsCfgs):
     log.info(f'Starting {RESOURCE_KIND_DATARECORD} processing...')
 
 
+def events_process(event: dict, subs_cfgs: List[SubscriptionCfg],
+                   notif_publisher: NotificationPublisher):
+    log.info('Got event: %s', event)
+
+    e = Event(event)
+
+    notifs = EventSubsCfgMatcher(e).match_blackbox(subs_cfgs)
+    log.info('To notify: %s', notifs)
+    notif_publisher.publish_list(notifs, NOTIF_TOPIC)
+
+
 def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
     wait_sc_populated(subs_cfgs, RESOURCE_KIND_EVENT, timeout=60)
     log.info(f'Starting {RESOURCE_KIND_EVENT} processing...')
+
+    notif_publisher = NotificationPublisher()
+
+    log.info(f'Start Event telemetry processing. Topic: {EVENTS_TOPIC}')
+
+    for msg in kafka_consumer(EVENTS_TOPIC,
+                              group_id=EVENTS_GROUP_ID,
+                              client_id=consumer_id(EVENTS_GROUP_ID),
+                              auto_offset_reset='latest'):
+        try:
+            msg.value['id'] = msg.key
+            events_process(msg.value,
+                           list(subs_cfgs.get(RESOURCE_KIND_EVENT, {}).values()),
+                           notif_publisher)
+        except Exception as ex:
+            log.error(''.join(traceback.format_tb(ex.__traceback__)))
+            log.error('Failed processing %s with: %s', msg.key, ex)
 
 
 def local_time():

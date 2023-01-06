@@ -4,8 +4,9 @@ from test_db import TestRxTxDriverESMockedBase
 from nuvla.notifs.db import RxTxDB, bytes_to_gb, gb_to_bytes
 from nuvla.notifs.schema.rxtx import RxTx
 from nuvla.notifs.matcher import ResourceSubsCfgMatcher, \
-    NuvlaEdgeSubsCfgMatcher, TaggedResourceSubsCfgMatcher
+    NuvlaEdgeSubsCfgMatcher, TaggedResourceSubsCfgMatcher, EventSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
+from nuvla.notifs.event import Event
 from nuvla.notifs.resource import Resource
 from nuvla.notifs.subscription import SubscriptionCfg
 
@@ -180,7 +181,7 @@ class TestTaggedResourceSubsConfigMatcher(unittest.TestCase):
         assert ['subs/03', 'subs/05'] == list(rscm.resource_subscriptions_ids(r, scs))
 
 
-class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
+class TestNuvlaEdgeSubsCfgMatcher(unittest.TestCase):
 
     def test_init(self):
         scm = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({}))
@@ -461,7 +462,7 @@ class TestNuvlaEdgeSubsConfMatcher(unittest.TestCase):
         assert 'eth1' == nem.network_device_name(sc)
 
 
-class TestNuvlaEdgeSubsConfMatcherDBInMem(TestRxTxDriverESMockedBase):
+class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
 
     driver = None
 
@@ -1400,3 +1401,175 @@ class TestNuvlaEdgeSubsConfMatcherDBInMem(TestRxTxDriverESMockedBase):
         assert res[0]['subs_description'] == 'NE network Rx'
         assert res[0]['timestamp'] == '2022-08-02T15:21:46Z'
         assert True is net_db.get_above_thld(sc_rx_wlan1['id'], *resource)
+
+
+class TestBlackboxSubsCfgMatcher(unittest.TestCase):
+
+    def test_filter_subs_cfgs(self):
+        subs_cfg = SubscriptionCfg(
+            {
+                'description': 'BB',
+                'category': 'notification',
+                'method-ids': [
+                    'notification-method/b004854e-d00a-4ff2-8293-343748eb2774',
+                    'notification-method/58996b63-3a47-42cc-8cff-bd84248bb000'
+                ],
+                'name': 'BB',
+                'criteria': {
+                    'metric': 'tag',
+                    'kind': 'string',
+                    'condition': 'is',
+                    'value': 'application/blackbox'
+                },
+                'id': 'subscription-config/031a9699-46e6-453b-b9a0-406b272b01a7',
+                'resource-type': 'subscription-config',
+                'acl': {
+                    'edit-data': [
+                        'group/nuvla-admin'
+                    ],
+                    'owners': [
+                        'me'
+                    ]
+                },
+                'resource-filter': "tag='application/blackbox'",
+                'enabled': True,
+                'resource-kind': 'event'
+            }
+        )
+
+        event = Event(
+            {
+                 'category': 'user',
+                 'tags': [
+                 'application/blackbox'
+                 ],
+                 'content': {
+                 'resource': {
+                 'href': 'data-record/ae2d50dc-76ae-44ee-bd14-deaf139e4a67'
+                 },
+                 'state': 'created'
+                 },
+                 'created-by': 'me',
+                 'id': 'event/7ed45fc7-f63d-4c3e-9558-25c370c7f4c5',
+                 'severity': 'medium',
+                 'resource-type': 'event',
+                 'acl': {
+                 'owners': [
+                 'me'
+                 ],
+                 'view-data': [
+                 'group/nuvla-admin'
+                 ],
+                 },
+                 'operations': [
+                 {
+                 'rel': 'delete',
+                 'href': 'event/7ed45fc7-f63d-4c3e-9558-25c370c7f4c5'
+                 }
+                 ],
+                 'timestamp': '2023-01-04T15:23:37.383Z'
+                    }
+        )
+
+        subs_cfgs = EventSubsCfgMatcher(event).resource_subscriptions([subs_cfg])
+        assert 1 == len(subs_cfgs)
+
+        subs_cfg = SubscriptionCfg(
+            {
+                'description': 'BB',
+                'category': 'notification',
+                'method-ids': [
+                    'notification-method/b004854e-d00a-4ff2-8293-343748eb2774',
+                    'notification-method/58996b63-3a47-42cc-8cff-bd84248bb000'
+                ],
+                'name': 'BB',
+                'criteria': {
+                    'metric': 'tag',
+                    'kind': 'string',
+                    'condition': 'is',
+                    'value': 'application/whitebox'
+                },
+                'id': 'subscription-config/031a9699-46e6-453b-b9a0-406b272b01a7',
+                'resource-type': 'subscription-config',
+                'acl': {
+                    'edit-data': [
+                        'group/nuvla-admin'
+                    ],
+                    'owners': [
+                        'me'
+                    ]
+                },
+                'resource-filter': "tag='application/whitebox'",
+                'enabled': True,
+                'resource-kind': 'event'
+            }
+        )
+
+        subs_cfgs = EventSubsCfgMatcher(event).resource_subscriptions([subs_cfg])
+        assert 0 == len(subs_cfgs)
+
+    def test_match_blackbox_events(self):
+
+        subs_cfg = SubscriptionCfg(
+            {
+                'description': 'BB',
+                'category': 'notification',
+                'method-ids': [
+                    'notification-method/b004854e-d00a-4ff2-8293-343748eb2774',
+                    'notification-method/58996b63-3a47-42cc-8cff-bd84248bb000'
+                ],
+                'name': 'BB',
+                'criteria': {
+                    'metric': 'tag',
+                    'kind': 'string',
+                    'condition': 'is',
+                    'value': 'application/blackbox'
+                },
+                'id': 'subscription-config/031a9699-46e6-453b-b9a0-406b272b01a7',
+                'resource-type': 'subscription-config',
+                'acl': {
+                    'edit-data': [
+                        'group/nuvla-admin'
+                    ],
+                    'owners': [
+                        'me'
+                    ]
+                },
+                'resource-filter': "tag='application/blackbox'",
+                'enabled': True,
+                'resource-kind': 'event'
+            }
+        )
+
+        href = 'data-record/ae2d50dc-76ae-44ee-bd14-deaf139e4a67'
+        event = Event(
+            {
+                'category': 'user',
+                'tags': [
+                    'application/blackbox'
+                ],
+                'content': {
+                    'resource': {
+                        'href': href
+                    },
+                    'state': 'created'
+                },
+                'created-by': 'me',
+                'id': 'event/7ed45fc7-f63d-4c3e-9558-25c370c7f4c5',
+                'severity': 'medium',
+                'resource-type': 'event',
+                'acl': {
+                    'owners': [
+                        'me'
+                    ],
+                    'view-data': [
+                        'group/nuvla-admin'
+                    ],
+                },
+                'timestamp': '2023-01-04T15:23:37.383Z'
+            }
+        )
+
+        notifs = EventSubsCfgMatcher(event).match_blackbox([subs_cfg])
+        assert 1 == len(notifs)
+        assert notifs[0]['resource_uri'].endswith(href)

@@ -4,15 +4,15 @@ user notification subscriptions against the metrics coming from different
 components of Nuvla the user has access to.
 """
 
-from typing import Dict, Union, List, Iterator
+from typing import Dict, Union, List
 
 from nuvla.notifs.db import RxTxDB
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.metric import NuvlaEdgeMetrics, \
-    MetricNotFound
+from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound
+from nuvla.notifs.event import Event
 from nuvla.notifs.resource import Resource
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
-    NuvlaEdgeNotification
+    NuvlaEdgeNotification, BlackboxEventNotification
 from nuvla.notifs.subscription import SubscriptionCfg
 
 log = get_logger('matcher')
@@ -405,4 +405,37 @@ class NuvlaEdgeSubsCfgMatcher:
             if res_m:
                 log.debug('Condition matched: %s', sc)
                 res.append(self.notif_build_online(sc, res_m))
+        return res
+
+
+class EventSubsCfgMatcher:
+
+    def __init__(self, event: Event):
+        self._e = event
+        self._trscm = TaggedResourceSubsCfgMatcher()
+
+    def event_id(self):
+        return self._e['id']
+
+    def resource_subscriptions(self, subs_cfgs: List[SubscriptionCfg]) -> \
+            List[SubscriptionCfg]:
+        return list(self._trscm.resource_subscriptions(self._e, subs_cfgs))
+
+    def notif_build_blackbox(self,
+                             sc: SubscriptionCfg) -> BlackboxEventNotification:
+        return BlackboxEventNotification(sc, self._e)
+
+    def match_blackbox(self, subs_cfgs: List[SubscriptionCfg]) -> List[
+            BlackboxEventNotification]:
+        res: List[BlackboxEventNotification] = []
+        subs_on_resource = self.resource_subscriptions(subs_cfgs)
+        log.debug('Active subscriptions on %s: %s',
+                  self.event_id(), [x.get('id') for x in subs_on_resource])
+        for sc in subs_on_resource:
+            log.debug('Matching subscription %s on %s', sc.get("id"),
+                      self.event_id())
+            if self._e.content_match_href('^data-record/.*') and \
+                    self._e.content_is_state('created'):
+                res.append(self.notif_build_blackbox(sc))
+
         return res

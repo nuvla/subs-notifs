@@ -197,7 +197,10 @@ class SelfUpdatingDict(LoggingDict):
             # we don't know where the key is defined,
             # so delete from all the top level maps.
             for k in self.keys():
-                del self[k][key]
+                try:
+                    del self[k][key]
+                except KeyError as ex:
+                    log.warning('Deleting sub-key: no %s under %s', str(ex), k)
         else:
             rk = value.get('resource-kind')
             if rk not in RESOURCE_KINDS:

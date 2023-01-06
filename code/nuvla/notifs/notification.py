@@ -1,6 +1,7 @@
 import json
 from typing import List, Dict, Union
 
+from nuvla.notifs.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.subscription import SubscriptionCfg
@@ -76,3 +77,22 @@ class NuvlaEdgeNotificationBuilder:
 
     def build(self) -> NuvlaEdgeNotification:
         return self._n
+
+
+class BlackboxEventNotification(dict):
+
+    def __init__(self, sc: SubscriptionCfg, event: Event):
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'method_ids': sc['method-ids'],
+                          'subs_description': sc['description'],
+                          'resource_name': 'blackbox',
+                          'resource_description': 'blackbox',
+                          'resource_uri': f'api/{event.resource_id()}',
+                          'metric': 'content-type',
+                          'condition': sc['criteria']['condition'],
+                          'condition_value': str(sc['criteria'].get('value', '')),
+                          'value': 'true',
+                          'timestamp': event.timestamp().split('.')[0] + 'Z',
+                          'recovery': True})
