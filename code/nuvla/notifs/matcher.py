@@ -310,7 +310,7 @@ class NuvlaEdgeSubsCfgMatcher:
     def notif_build_net_rx(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .name(f'{res_m["interface"]} Rx above') \
+            .metric_name(f'{res_m["interface"]} Rx above') \
             .value(res_m['value']) \
             .recovery(res_m.get('recovery', False)) \
             .build()
@@ -318,7 +318,7 @@ class NuvlaEdgeSubsCfgMatcher:
     def notif_build_net_tx(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .name(f'{res_m["interface"]} Tx above') \
+            .metric_name(f'{res_m["interface"]} Tx above') \
             .value(res_m['value']) \
             .recovery(res_m.get('recovery', False)) \
             .build()
@@ -326,31 +326,31 @@ class NuvlaEdgeSubsCfgMatcher:
     def notif_build_load(self, sc: SubscriptionCfg,
                          res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .name('NE load %') \
-            .value(self._m.load_pct_curr()) \
+            .metric_name(sc.criteria_metric()) \
             .recovery(res_m.get('recovery', False)) \
+            .value(self._m.load_pct_curr()) \
             .build()
 
     def notif_build_ram(self, sc: SubscriptionCfg,
                         res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .name('NE ram %') \
-            .value(self._m.ram_pct_curr()) \
+            .metric_name(sc.criteria_metric()) \
             .recovery(res_m.get('recovery', False)) \
+            .value(self._m.ram_pct_curr()) \
             .build()
 
     def notif_build_disk(self, sc: SubscriptionCfg,
                          res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .name('NE disk %') \
-            .value(self._m.disk_pct_curr(sc)) \
+            .metric_name(sc.criteria_metric()) \
             .recovery(res_m.get('recovery', False)) \
+            .value(self._m.disk_pct_curr(sc.criteria_dev_name())) \
             .build()
 
     def notif_build_online(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .name('NE online') \
+            .metric_name('NE online') \
             .condition(str(res_m.get('recovery', False)).lower()) \
             .recovery(res_m.get('recovery', False)) \
             .value('') \

@@ -68,7 +68,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
-        notif = notif_builder.name('RxGB').value(123).recovery(True).build()
+        notif = notif_builder.metric_name('RxGB').value(123).recovery(True).build()
         assert {'id': 'subscription-config/11111111-2222-3333-4444-555555555555',
                 'subs_id': 'subscription-config/11111111-2222-3333-4444-555555555555',
                 'subs_name': 'nb Rx',
@@ -145,6 +145,187 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert res['recovery'] is False
         assert res['value'] == ''
         assert res['condition_value'] == ''
+
+    def test_builder_ne_disk(self):
+        thld = 80
+        sc = SubscriptionCfg(
+            {
+                'id': 'subscription-config/01',
+                'name': 'disk >85%',
+                'description': 'disk >85%',
+                'method-ids': [
+                    'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+                ],
+                'acl': {
+                    'owners': [
+                        user
+                    ]},
+                'criteria': {
+                    'metric': 'disk',
+                    'kind': 'numeric',
+                    'dev-name': 'vda1',
+                    'condition': '>',
+                    'value': str(thld)
+                }
+            }
+        )
+
+        # Value is above the threshold.
+        metrics = self._metrics_above_thld(thld)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
+        res = nescm.notif_build_disk(sc, nescm.MATCHED)
+        self._validate_above_thld(res, sc)
+
+        # Recovery
+        metrics = self._metrics_recovery(thld)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
+        res = nescm.notif_build_disk(sc, nescm.MATCHED_RECOVERY)
+        self._validate_recovery(res, sc)
+
+    def test_builder_ne_ram(self):
+        thld = 80
+        sc = SubscriptionCfg(
+            {
+                'id': 'subscription-config/01',
+                'name': 'ram >85%',
+                'description': 'ram >85%',
+                'method-ids': [
+                    'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+                ],
+                'acl': {
+                    'owners': [
+                        user
+                    ]},
+                'criteria': {
+                    'metric': 'ram',
+                    'kind': 'numeric',
+                    'condition': '>',
+                    'value': str(thld)
+                }
+            }
+        )
+
+        # Value is above the threshold.
+        metrics = self._metrics_above_thld(thld)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
+        res = nescm.notif_build_ram(sc, nescm.MATCHED)
+        self._validate_above_thld(res, sc)
+
+        # Recovery
+        metrics = self._metrics_recovery(thld)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
+        res = nescm.notif_build_ram(sc, nescm.MATCHED_RECOVERY)
+        self._validate_recovery(res, sc)
+
+    def test_builder_ne_load(self):
+        thld = 80
+        sc = SubscriptionCfg(
+            {
+                'id': 'subscription-config/01',
+                'name': 'load >85%',
+                'description': 'load >85%',
+                'method-ids': [
+                    'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+                ],
+                'acl': {
+                    'owners': [
+                        user
+                    ]},
+                'criteria': {
+                    'metric': 'load',
+                    'kind': 'numeric',
+                    'condition': '>',
+                    'value': str(thld)
+                }
+            }
+        )
+
+        # Value is above the threshold.
+        metrics = self._metrics_above_thld(thld)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
+        res = nescm.notif_build_load(sc, nescm.MATCHED)
+        self._validate_above_thld(res, sc)
+
+        # Recovery
+        metrics = self._metrics_recovery(thld)
+        nescm = NuvlaEdgeSubsCfgMatcher(metrics)
+        res = nescm.notif_build_load(sc, nescm.MATCHED_RECOVERY)
+        self._validate_recovery(res, sc)
+
+
+    @staticmethod
+    def _metrics_recovery(thld_pct: int):
+        delta = 1
+        return NuvlaEdgeMetrics(
+            {'id': 'nuvlabox/01',
+             'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
+             'DESCRIPTION': 'None - self-registration number 220171415421241',
+             'TAGS': ['arch=x86-64'],
+             'ONLINE': True,
+             'ONLINE_PREV': False,
+             'TIMESTAMP': '2022-08-02T15:21:46Z',
+             'ACL': {
+                 'owners': [user],
+                 'view-data': ['group/elektron',
+                               'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
+                               'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']},
+             'RESOURCES': {
+                 'CPU': {'load': (thld_pct - delta) / 10, 'capacity': 10, 'topic': 'cpu'},
+                 'RAM': {'used': (thld_pct - delta) * 10, 'capacity': 1000, 'topic': 'ram'},
+                 'DISKS': [{'used': thld_pct - delta, 'capacity': 100, 'device': 'vda1'}]
+             },
+             'RESOURCES_PREV': {
+                 'CPU': {'load': (thld_pct + delta) / 10, 'capacity': 10, 'topic': 'cpu'},
+                 'RAM': {'used': (thld_pct + delta) * 10, 'capacity': 1000, 'topic': 'ram'},
+                 'DISKS': [{'used': thld_pct + delta, 'capacity': 100, 'device': 'vda1'}]},
+             })
+
+    @staticmethod
+    def _metrics_above_thld(thld_pct: int):
+        delta = 1
+        return NuvlaEdgeMetrics(
+            {'id': 'nuvlabox/01',
+             'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
+             'DESCRIPTION': 'None - self-registration number 220171415421241',
+             'TAGS': ['arch=x86-64'],
+             'ONLINE': True,
+             'ONLINE_PREV': False,
+             'TIMESTAMP': '2022-08-02T15:21:46Z',
+             'ACL': {
+                 'owners': [user],
+                 'view-data': ['group/elektron',
+                               'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
+                               'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']},
+             'RESOURCES': {
+                 'CPU': {'load': (thld_pct + delta) / 10, 'capacity': 10, 'topic': 'cpu'},
+                 'RAM': {'used': (thld_pct + delta) * 10, 'capacity': 1000, 'topic': 'ram'},
+                 'DISKS': [{'used': thld_pct + delta, 'capacity': 100, 'device': 'vda1'}]},
+             'RESOURCES_PREV': {
+                 'CPU': {'load': (thld_pct - delta) / 10, 'capacity': 10, 'topic': 'cpu'},
+                 'RAM': {'used': (thld_pct - delta) * 10, 'capacity': 1000, 'topic': 'ram'},
+                 'DISKS': [{'used': thld_pct - delta, 'capacity': 100, 'device': 'vda1'}]},
+             })
+
+    @staticmethod
+    def _validate_above_thld(res, sc):
+        assert res['method_ids'] == sc.get('method-ids')
+        assert res['subs_description'] == sc.get('description')
+        assert res['metric'] == NuvlaEdgeNotificationBuilder.METRIC_NAME_MAP[
+            sc.criteria_metric()]
+        assert res['condition'] == sc.criteria_condition()
+        assert res['recovery'] is False
+        assert res['condition_value'] == str(sc.criteria_value())
+        assert res['value'] > sc.criteria_value()
+
+    @staticmethod
+    def _validate_recovery(res, sc):
+        assert res['method_ids'] == sc.get('method-ids')
+        assert res['subs_description'] == sc.get('description')
+        assert res['metric'] == NuvlaEdgeNotificationBuilder.METRIC_NAME_MAP[sc.criteria_metric()]
+        assert res['condition'] == sc.criteria_condition()
+        assert res['recovery'] is True
+        assert res['condition_value'] == str(sc.criteria_value())
+        assert res['value'] < sc.criteria_value()
 
 
 class TestNuvlaEdgeNotification(unittest.TestCase):

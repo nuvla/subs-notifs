@@ -52,11 +52,18 @@ class NuvlaEdgeNotification(dict):
 
 
 class NuvlaEdgeNotificationBuilder:
+
+    METRIC_NAME_MAP = {
+        'disk': 'NE disk %',
+        'ram': 'NE ram %',
+        'load': 'NE load %'
+    }
+
     def __init__(self, sc: SubscriptionCfg, metrics: Resource):
         self._n = NuvlaEdgeNotification(sc, metrics)
 
-    def name(self, name: str):
-        self._n['metric'] = name
+    def metric_name(self, metric_name: str):
+        self._n['metric'] = self.METRIC_NAME_MAP.get(metric_name, metric_name)
         return self
 
     def value(self, value: Union[int, float]):
