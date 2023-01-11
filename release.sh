@@ -25,13 +25,11 @@ if [[ -z ${VERSION} ]]; then
 fi
 
 if git rev-parse "$VERSION" >/dev/null 2>&1; then
-    echo "ERROR: tag/release already exists. Cannot over overwrite it"
+    echo "ERROR: tag/release already exists. Cannot overwrite it"
     exit 1
 fi
 
 echo "INFO: tag and release ${VERSION}"
-
-TARGET=deploy
 
 do_push() {
     echo "INFO: PUSHING changes."
