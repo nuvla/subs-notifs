@@ -40,8 +40,37 @@ class SubscriptionCfg(dict):
     def __getattr__(self, attr):
         return self[attr]
 
+    #
+    # Required attributes on criteria.
+    #
+
+    def criteria_condition(self) -> str:
+        """
+        'condition' is required attribute on criteria.
+        """
+        return self['criteria']['condition']
+
+    def criteria_metric(self) -> str:
+        """
+        'metric' is required attribute on criteria.
+        """
+        return self['criteria']['metric']
+
+    def criteria_kind(self) -> str:
+        """
+        'kind' is required attribute on criteria.
+        """
+        return self['criteria']['kind']
+
+    #
+    # Optional attributes on criteria.
+    #
+
     def criteria_value(self) -> Union[int, float, bool]:
-        val = self['criteria']['value']
+        """
+        'value' is optional attribute in criteria.
+        """
+        val = self['criteria'].get('value')
         if self.criteria_kind() == 'numeric':
             if self['criteria'].get('value-type') == 'double' or '.' in val:
                 return float(val)
@@ -50,26 +79,27 @@ class SubscriptionCfg(dict):
             return val in ['true', 'True']
         return val
 
-    def criteria_metric(self) -> str:
-        return self['criteria']['metric']
-
-    def criteria_kind(self) -> str:
-        return self['criteria']['kind']
-
     def criteria_dev_name(self) -> str:
+        """
+        'dev-name' is optional attribute in criteria.
+        """
         return self['criteria'].get('dev-name')
 
     def criteria_reset_interval(self) -> Union[None, str]:
+        """
+        reset interval is optional attribute in criteria.
+        """
         return self['criteria'].get(self.KEY_RESET_INTERVAL)
 
     def criteria_reset_start_date(self) -> Union[None, int]:
+        """
+        reset start date is optional attribute in criteria.
+        """
         return self['criteria'].get(self.KEY_RESET_START_DAY)
 
-    def _owner(self):
-        owners = self.get('acl', {}).get('owners', [])
-        if owners:
-            return owners[0]
-        return None
+    #
+    # Predicate methods.
+    #
 
     def is_enabled(self) -> bool:
         return self.get('enabled', False)
@@ -82,6 +112,12 @@ class SubscriptionCfg(dict):
 
     def is_metric_cond(self, metric: str, cond: str) -> bool:
         return self.is_metric(metric) and self.is_condition(cond)
+
+    def _owner(self):
+        owners = self.get('acl', {}).get('owners', [])
+        if owners:
+            return owners[0]
+        return None
 
     def can_view_resource(self, resource_acl: dict) -> bool:
         subs_owner = self._owner()

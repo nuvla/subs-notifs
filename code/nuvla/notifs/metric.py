@@ -134,10 +134,10 @@ class NuvlaEdgeMetrics(Resource):
     def ram_pct_prev(self) -> float:
         return self._ram_pct(self.RESOURCES_PREV_KEY)
 
-    def disk_pct_curr(self, disk_name) -> Union[None, float]:
+    def disk_pct_curr(self, disk_name: str) -> Union[None, float]:
         return self._disk_pct(self.RESOURCES_KEY, disk_name)
 
-    def disk_pct_prev(self, disk_name) -> Union[None, float]:
+    def disk_pct_prev(self, disk_name: str) -> Union[None, float]:
         return self._disk_pct(self.RESOURCES_PREV_KEY, disk_name)
 
     def default_gw_name(self) -> Union[None, str]:
