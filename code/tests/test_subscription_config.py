@@ -55,7 +55,7 @@ class TestSubscriptionConfig(unittest.TestCase):
 
     def test_is_metric_cond(self):
         sc = SubscriptionCfg({'criteria': {'metric': 'foo',
-                                              'condition': 'bar'}})
+                                           'condition': 'bar'}})
         assert False is sc.is_metric_cond('baz', 'toto')
         assert False is sc.is_metric_cond('foo', 'baz')
         assert True is sc.is_metric_cond('foo', 'bar')

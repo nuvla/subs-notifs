@@ -23,9 +23,9 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
         self.assertRaises(MetricNotFound, nerm._ram_pct, nerm.RESOURCES_KEY)
         self.assertRaises(MetricNotFound, nerm.ram_pct_curr)
         self.assertRaises(MetricNotFound, nerm.ram_pct_prev)
-        self.assertRaises(MetricNotFound, nerm._disk_pct, nerm.RESOURCES_KEY, 'foo')
-        self.assertRaises(MetricNotFound, nerm.disk_pct_curr, 'foo')
-        self.assertRaises(MetricNotFound, nerm.disk_pct_prev, 'foo')
+        assert None is nerm._disk_pct(nerm.RESOURCES_KEY, 'foo')
+        assert None is nerm.disk_pct_curr('foo')
+        assert None is nerm.disk_pct_prev('foo')
 
     def test_load_pct(self):
         nerm = NuvlaEdgeMetrics({

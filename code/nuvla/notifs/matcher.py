@@ -4,6 +4,7 @@ user notification subscriptions against the metrics coming from different
 components of Nuvla the user has access to.
 """
 
+import traceback
 from typing import Dict, Union, List
 
 from nuvla.notifs.db import RxTxDB
@@ -18,14 +19,14 @@ from nuvla.notifs.subscription import SubscriptionCfg
 log = get_logger('matcher')
 
 
-def ge(val, sc: SubscriptionCfg) -> bool:
+def ge(val: Union[int, float], sc: SubscriptionCfg) -> bool:
     """greater than or equal"""
-    return val and val >= sc.criteria_value()
+    return val >= sc.criteria_value()
 
 
-def le(val, sc: SubscriptionCfg) -> bool:
+def le(val: Union[int, float], sc: SubscriptionCfg) -> bool:
     """less than or equal"""
-    return val and val <= sc.criteria_value()
+    return val <= sc.criteria_value()
 
 
 NETWORK_METRIC_PREFIX = 'network-'
@@ -134,15 +135,17 @@ class NuvlaEdgeSubsCfgMatcher:
     def metrics_id(self) -> str:
         return self._m.get('id')
 
-    def _load_moved_above_thld(self, sc: SubscriptionCfg):
-        return self._m.load_pct_prev() <= sc.criteria_value() < self._m.load_pct_curr()
+    def _load_moved_above_thld(self, sc: SubscriptionCfg) -> bool:
+        return self._m.load_pct_prev() <= sc.criteria_value() < \
+               self._m.load_pct_curr()
 
-    def _load_moved_below_thld(self, sc: SubscriptionCfg):
-        return self._m.load_pct_curr() < sc.criteria_value() <= self._m.load_pct_prev()
+    def _load_moved_below_thld(self, sc: SubscriptionCfg) -> bool:
+        return self._m.load_pct_curr() < sc.criteria_value() <= \
+               self._m.load_pct_prev()
 
-    def _load_moved_over_thld(self, sc: SubscriptionCfg):
-        return self._load_moved_above_thld(sc) or self._load_moved_below_thld(
-            sc)
+    def _load_moved_over_thld(self, sc: SubscriptionCfg) -> bool:
+        return self._load_moved_above_thld(sc) or \
+               self._load_moved_below_thld(sc)
 
     @metric_not_found_ex_handler
     def match_load(self, sc: SubscriptionCfg) -> Union[
@@ -262,6 +265,10 @@ class NuvlaEdgeSubsCfgMatcher:
             log.error(msg)
             raise ValueError(msg)
 
+        if sc is None or len(sc) < 1:
+            log.debug('Subscription configuration not defined ... return')
+            return None
+
         if not sc.is_metric_cond(f'{NETWORK_METRIC_PREFIX}{kind}', '>'):
             log.debug('Metric condition is not %s%s ">" ... return',
                       NETWORK_METRIC_PREFIX, kind)
@@ -280,6 +287,9 @@ class NuvlaEdgeSubsCfgMatcher:
             val = self.get_rxtx_gb(sc, dev_name, kind)
         except KeyError as ex:
             log.warning('No such key %s when getting rxtx from db', ex)
+            return None
+
+        if val is None:
             return None
 
         if ge(val, sc) and not self.is_rxtx_above_thld(sc, dev_name, kind):
@@ -361,6 +371,34 @@ class NuvlaEdgeSubsCfgMatcher:
             List[SubscriptionCfg]:
         return list(self._trscm.resource_subscriptions(self._m, subs_cfgs))
 
+    def matchers(self):
+        return {
+            # network Rx
+            'network_rx_above_thld':
+                {'matcher': self.network_rx_above_thld,
+                 'notif-builder': self.notif_build_net_rx},
+            # network Tx
+            'network_tx_above_thld':
+                {'matcher': self.network_tx_above_thld,
+                 'notif-builder': self.notif_build_net_tx},
+            # CPU load
+            'match_load':
+                {'matcher': self.match_load,
+                 'notif-builder': self.notif_build_load},
+            # RAM
+            'match_ram':
+                {'matcher': self.match_ram,
+                 'notif-builder': self.notif_build_ram},
+            # Disk
+            'match_disk':
+                {'matcher': self.match_disk,
+                 'notif-builder': self.notif_build_disk},
+            # Online
+            'match_online':
+                {'matcher': self.match_online,
+                 'notif-builder': self.notif_build_online}
+        }
+
     def match_all(self, subs_cfgs: List[SubscriptionCfg]) -> List[Dict]:
         res = []
         subs_on_resource = self.resource_subscriptions(subs_cfgs)
@@ -369,42 +407,23 @@ class NuvlaEdgeSubsCfgMatcher:
         for sc in subs_on_resource:
             log.debug('Matching subscription %s on %s', sc.get("id"),
                       self.metrics_id())
-            # network Rx
-            res_m = self.network_rx_above_thld(sc)
-            log.debug('network_rx_above_thld... %s', res_m)
-            if res_m:
-                log.debug('Condition matched: %s', sc)
-                res.append(self.notif_build_net_rx(sc, res_m))
-            # network Tx
-            res_m = self.network_tx_above_thld(sc)
-            log.debug('network_tx_above_thld... %s', res_m)
-            if res_m:
-                log.debug('Condition matched: %s', sc)
-                res.append(self.notif_build_net_tx(sc, res_m))
-            # CPU load
-            res_m = self.match_load(sc)
-            log.debug('match_load... %s', res_m)
-            if res_m:
-                log.debug('Condition matched: %s', sc)
-                res.append(self.notif_build_load(sc, res_m))
-            # RAM
-            res_m = self.match_ram(sc)
-            log.debug('match_ram... %s', res_m)
-            if res_m:
-                log.debug('Condition matched: %s', sc)
-                res.append(self.notif_build_ram(sc, res_m))
-            # Disk
-            res_m = self.match_disk(sc)
-            log.debug('match_disk... %s', res_m)
-            if res_m:
-                log.debug('Condition matched: %s', sc)
-                res.append(self.notif_build_disk(sc, res_m))
-            # Online
-            res_m = self.match_online(sc)
-            log.debug('match_online... %s', res_m)
-            if res_m:
-                log.debug('Condition matched: %s', sc)
-                res.append(self.notif_build_online(sc, res_m))
+            for m_name, matcher in self.matchers().items():
+                try:
+                    res_m = matcher['matcher'](sc)
+                except Exception as ex:
+                    log.error('Failed matching %s: %s', m_name, ex)
+                    traceback.print_exc()
+                    continue
+                log.debug('%s... %s', m_name, res_m)
+                if res_m:
+                    log.debug('Condition matched: %s', sc)
+                    try:
+                        res.append(matcher['notif-builder'](sc, res_m))
+                    except Exception as ex:
+                        log.error('Failed building notification for %s: %s',
+                                  m_name, ex)
+                        traceback.print_exc()
+
         return res
 
 

@@ -24,6 +24,23 @@ RESOURCE_KINDS = [v for k, v in globals().items() if
                   k.startswith('RESOURCE_KIND_')]
 
 
+class RequiredAttributedMissing(KeyError):
+
+    def __init__(self, attr):
+        super(RequiredAttributedMissing, self).__init__(attr)
+
+
+def required_attr_not_found_ex_handler(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except KeyError as ex:
+            log.error('SubscriptionCfg: Required attribute is missing: %s', ex)
+            raise RequiredAttributedMissing(str(ex))
+
+    return wrapper
+
+
 class SubscriptionCfg(dict):
     """
     Dictionary holding notification subscription configuration. Contains helper
@@ -44,23 +61,33 @@ class SubscriptionCfg(dict):
     # Required attributes on criteria.
     #
 
+    @required_attr_not_found_ex_handler
+    def criteria(self):
+        """
+        'criteria' is required attribute on subscription configuration.
+        """
+        return self['criteria']
+
+    @required_attr_not_found_ex_handler
     def criteria_condition(self) -> str:
         """
         'condition' is required attribute on criteria.
         """
-        return self['criteria']['condition']
+        return self.criteria()['condition']
 
+    @required_attr_not_found_ex_handler
     def criteria_metric(self) -> str:
         """
         'metric' is required attribute on criteria.
         """
-        return self['criteria']['metric']
+        return self.criteria()['metric']
 
+    @required_attr_not_found_ex_handler
     def criteria_kind(self) -> str:
         """
         'kind' is required attribute on criteria.
         """
-        return self['criteria']['kind']
+        return self.criteria()['kind']
 
     #
     # Optional attributes on criteria.
@@ -70,9 +97,9 @@ class SubscriptionCfg(dict):
         """
         'value' is optional attribute in criteria.
         """
-        val = self['criteria'].get('value')
+        val = self.criteria().get('value')
         if self.criteria_kind() == 'numeric':
-            if self['criteria'].get('value-type') == 'double' or '.' in val:
+            if self.criteria().get('value-type') == 'double' or '.' in val:
                 return float(val)
             return int(val)
         if self.criteria_kind() == 'boolean':
@@ -83,19 +110,19 @@ class SubscriptionCfg(dict):
         """
         'dev-name' is optional attribute in criteria.
         """
-        return self['criteria'].get('dev-name')
+        return self.criteria().get('dev-name')
 
     def criteria_reset_interval(self) -> Union[None, str]:
         """
         reset interval is optional attribute in criteria.
         """
-        return self['criteria'].get(self.KEY_RESET_INTERVAL)
+        return self.criteria().get(self.KEY_RESET_INTERVAL)
 
     def criteria_reset_start_date(self) -> Union[None, int]:
         """
         reset start date is optional attribute in criteria.
         """
-        return self['criteria'].get(self.KEY_RESET_START_DAY)
+        return self.criteria().get(self.KEY_RESET_START_DAY)
 
     #
     # Predicate methods.
@@ -105,10 +132,10 @@ class SubscriptionCfg(dict):
         return self.get('enabled', False)
 
     def is_metric(self, metric: str) -> bool:
-        return self.criteria['metric'] == metric
+        return self.criteria()['metric'] == metric
 
     def is_condition(self, condition: str) -> bool:
-        return self.criteria['condition'] == condition
+        return self.criteria()['condition'] == condition
 
     def is_metric_cond(self, metric: str, cond: str) -> bool:
         return self.is_metric(metric) and self.is_condition(cond)

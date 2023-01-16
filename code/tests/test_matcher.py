@@ -3,12 +3,33 @@ import unittest
 from test_db import TestRxTxDriverESMockedBase
 from nuvla.notifs.db import RxTxDB, bytes_to_gb, gb_to_bytes
 from nuvla.notifs.schema.rxtx import RxTx
-from nuvla.notifs.matcher import ResourceSubsCfgMatcher, \
+from nuvla.notifs.matcher import ResourceSubsCfgMatcher, ge, le, \
     NuvlaEdgeSubsCfgMatcher, TaggedResourceSubsCfgMatcher, EventSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.event import Event
 from nuvla.notifs.resource import Resource
-from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.subscription import SubscriptionCfg, RequiredAttributedMissing
+
+
+class TestUtils(unittest.TestCase):
+
+    def test_ge_le(self):
+        for fun in [ge, le]:
+            self.assertRaises(RequiredAttributedMissing, fun, None,
+                              SubscriptionCfg())
+            self.assertRaises(RequiredAttributedMissing, fun, 1,
+                              SubscriptionCfg())
+            self.assertRaises(RequiredAttributedMissing, fun, 1,
+                              SubscriptionCfg({'criteria': {}}))
+            # kind is required attribute
+            self.assertRaises(RequiredAttributedMissing, fun, 1,
+                              SubscriptionCfg({'criteria': {'value': 1}}))
+
+        assert False is ge(0, SubscriptionCfg({'criteria': {'value': 1,
+                                                            'kind': 'integer'}}))
+
+        assert True is le(0, SubscriptionCfg({'criteria': {'value': 1,
+                                                           'kind': 'integer'}}))
 
 
 class TestResourceSubsConfigMatcher(unittest.TestCase):
