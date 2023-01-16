@@ -4,6 +4,14 @@
 
 ### Changed
 
+## [0.0.3] - 2023-01-16
+
+### Changed
+
+- Refactor subscription matching. 
+- Enforce stronger requirement on missing required attr of subscription
+  configuration.
+
 ## [0.0.2] - 2023-01-11
 
 ### Changed
