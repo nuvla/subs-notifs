@@ -296,8 +296,9 @@ class NuvlaEdgeSubsCfgMatcher:
             self.set_rxtx_above_thld(sc, dev_name, kind)
             return {'interface': dev_name, 'value': val}
 
-        if le(val, sc) and self.is_rxtx_above_thld(sc, dev_name, kind):
-            self.reset_rxtx_above_thld(sc, dev_name, kind)
+        # FIXME: enable reset when migrated to work with bytes instead of Gbs.
+        # if le(val, sc) and self.is_rxtx_above_thld(sc, dev_name, kind):
+        #     self.reset_rxtx_above_thld(sc, dev_name, kind)
 
     def _went_offline(self):
         if self._m.get('ONLINE_PREV') and not self._m.get('ONLINE'):
