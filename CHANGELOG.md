@@ -4,6 +4,14 @@
 
 ### Changed
 
+## [0.0.5] - 2023-01-30
+
+### Changed
+
+- Empty subscription config filter on tags acts as wildcard.
+
+### Changed
+
 ## [0.0.4] - 2023-01-26
 
 ### Changed

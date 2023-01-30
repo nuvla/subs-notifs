@@ -80,10 +80,12 @@ class TaggedResourceSubsCfgMatcher(ResourceSubsCfgMatcher):
     def resource_subscribed(cls, resource: Resource,
                             subs_cfg: SubscriptionCfg,
                             with_disabled=False) -> bool:
-        return super().resource_subscribed(resource, subs_cfg,
-                                           with_disabled) and \
-               subs_cfg.tags_match(
-                   resource.get('tags', resource.get('TAGS', [])))
+        if super().resource_subscribed(resource, subs_cfg, with_disabled):
+            if subs_cfg.is_tags_set():
+                return subs_cfg.tags_match(
+                    resource.get('tags', resource.get('TAGS', [])))
+            return True
+        return False
 
 
 class TaggedResourceNetworkSubsCfgMatcher(TaggedResourceSubsCfgMatcher):
