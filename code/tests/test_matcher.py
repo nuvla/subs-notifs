@@ -161,20 +161,19 @@ class TestTaggedResourceSubsConfigMatcher(unittest.TestCase):
         r = Resource({'acl': {'owners': ['me']},
                       'tags': ['foo']})
         scm = TaggedResourceSubsCfgMatcher()
+        sc1 = SubscriptionCfg({
+            'enabled': True,
+            'acl': {'owners': ['me']}})
+        sc2 = SubscriptionCfg({
+            'enabled': True,
+            'resource-filter': "tags='foo'",
+            'acl': {'owners': ['me']}})
         scs = [SubscriptionCfg({}),
                SubscriptionCfg(
                    {'enabled': True}),
-               SubscriptionCfg({
-                   'enabled': True,
-                   'acl': {'owners': ['me']}}),
-               SubscriptionCfg({
-                   'enabled': True,
-                   'resource-filter': "tags='foo'",
-                   'acl': {'owners': ['me']}})]
-        assert [SubscriptionCfg({
-            'enabled': True,
-            'resource-filter': "tags='foo'",
-            'acl': {'owners': ['me']}})] == list(scm.resource_subscriptions(r, scs))
+               sc1,
+               sc2]
+        assert [sc1, sc2] == list(scm.resource_subscriptions(r, scs))
 
     def test_resource_subs_ids(self):
         r = Resource({'acl': {'owners': ['me']},

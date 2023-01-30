@@ -35,12 +35,15 @@ class TestSubscriptionConfig(unittest.TestCase):
     def test_tags_from_resource_filter(self):
         sc = SubscriptionCfg({'resource-filter': "tags='foo'"})
         assert ['foo'] == sc._tags_from_resource_filter()
+        assert True is sc.is_tags_set()
 
         sc = SubscriptionCfg({'resource-filter': ''})
         assert 0 == len(sc._tags_from_resource_filter())
+        assert False is sc.is_tags_set()
 
         sc = SubscriptionCfg({})
         assert 0 == len(sc._tags_from_resource_filter())
+        assert False is sc.is_tags_set()
 
     def test_tags_match(self):
         sc = SubscriptionCfg({})
