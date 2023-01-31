@@ -158,6 +158,9 @@ class SubscriptionCfg(dict):
                        self['resource-filter'].split("'")))
         return []
 
+    def is_tags_set(self) -> bool:
+        return 0 < len(self._tags_from_resource_filter())
+
     def tags_match(self, tags: Union[List, None]) -> bool:
         if tags:
             return bool(

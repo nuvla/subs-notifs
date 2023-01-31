@@ -4,6 +4,22 @@
 
 ### Changed
 
+## [0.0.5] - 2023-01-30
+
+### Changed
+
+- Empty subscription config filter on tags acts as wildcard.
+
+### Changed
+
+## [0.0.4] - 2023-01-26
+
+### Changed
+
+- Fix: temporary fix to avoid resets of the above threshold flag in a corner case. 
+
+### Changed
+
 ## [0.0.3] - 2023-01-16
 
 ### Changed
