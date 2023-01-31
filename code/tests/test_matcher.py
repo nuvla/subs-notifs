@@ -1,9 +1,9 @@
 import unittest
 
 from test_db import TestRxTxDriverESMockedBase
-from nuvla.notifs.db import RxTxDB, bytes_to_gb, gb_to_bytes
+from nuvla.notifs.db import RxTxDB, gb_to_bytes
 from nuvla.notifs.schema.rxtx import RxTx
-from nuvla.notifs.matcher import ResourceSubsCfgMatcher, ge, le, \
+from nuvla.notifs.matcher import ResourceSubsCfgMatcher, gt, lt, \
     NuvlaEdgeSubsCfgMatcher, TaggedResourceSubsCfgMatcher, EventSubsCfgMatcher
 from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.event import Event
@@ -11,10 +11,14 @@ from nuvla.notifs.resource import Resource
 from nuvla.notifs.subscription import SubscriptionCfg, RequiredAttributedMissing
 
 
+def mb_to_bytes(n):
+    return n * 1024 ** 2
+
+
 class TestUtils(unittest.TestCase):
 
-    def test_ge_le(self):
-        for fun in [ge, le]:
+    def test_gt_lt(self):
+        for fun in [gt, lt]:
             self.assertRaises(RequiredAttributedMissing, fun, None,
                               SubscriptionCfg())
             self.assertRaises(RequiredAttributedMissing, fun, 1,
@@ -25,11 +29,17 @@ class TestUtils(unittest.TestCase):
             self.assertRaises(RequiredAttributedMissing, fun, 1,
                               SubscriptionCfg({'criteria': {'value': 1}}))
 
-        assert False is ge(0, SubscriptionCfg({'criteria': {'value': 1,
+        assert False is gt(0, SubscriptionCfg({'criteria': {'value': 1,
                                                             'kind': 'integer'}}))
 
-        assert True is le(0, SubscriptionCfg({'criteria': {'value': 1,
+        assert True is lt(0, SubscriptionCfg({'criteria': {'value': 1,
                                                            'kind': 'integer'}}))
+
+        assert False is gt(0.0, SubscriptionCfg({'criteria': {'value': 0.0,
+                                                              'kind': 'integer'}}))
+
+        assert False is lt(0.0, SubscriptionCfg({'criteria': {'value': 0.0,
+                                                              'kind': 'integer'}}))
 
 
 class TestResourceSubsConfigMatcher(unittest.TestCase):
@@ -669,12 +679,12 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
 
         # Deltas for the traffic increase in GB. In the end they go above the
         # thresholds set in the subscription configurations.
-        deltas_rx = [0.0, 2.0, 4.0, 0.0]
-        deltas_tx = [0.0, 3.0, 0.0, 4.0]
+        deltas_rx = list(map(gb_to_bytes, [0, 2, 4, 0]))
+        deltas_tx = list(map(gb_to_bytes, [0, 3, 0, 4]))
 
         # The initial values just set the baseline for the network Rx and Tx.
-        gb_rx = 2.0 + deltas_rx[0]
-        gb_tx = 3.0 + deltas_tx[0]
+        bytes_rx = gb_to_bytes(2) + deltas_rx[0]
+        bytes_tx = gb_to_bytes(3) + deltas_tx[0]
 
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
@@ -689,8 +699,8 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
-                               'bytes-transmitted': gb_to_bytes(gb_tx),
-                               'bytes-received': gb_to_bytes(gb_rx)},
+                               'bytes-transmitted': bytes_tx,
+                               'bytes-received': bytes_rx},
                               {'interface': 'lo',
                                'bytes-transmitted': 63742086112,
                                'bytes-received': 63742086112
@@ -707,8 +717,8 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
         # An extra 2GB of data transmitted on the default gw.
         # This will still be below the threshold defined by the subscription
         # configurations.
-        gb_rx += deltas_rx[1]
-        gb_tx += deltas_tx[1]
+        bytes_rx += deltas_rx[1]
+        bytes_tx += deltas_tx[1]
 
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
@@ -723,8 +733,8 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
-                               'bytes-transmitted': gb_to_bytes(gb_tx),
-                               'bytes-received': gb_to_bytes(gb_rx)},
+                               'bytes-transmitted': bytes_tx,
+                               'bytes-received': bytes_rx},
                               {'interface': 'lo',
                                'bytes-transmitted': 63742086112,
                                'bytes-received': 63742086112
@@ -733,18 +743,16 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
         rxtx_db.update(nerm, [sc_rx, sc_tx])
 
-        assert sum(deltas_rx[:2]) == \
-               rxtx_db.get_rx_gb(sc_rx['id'], 'ne/1', 'eth0')
-        assert sum(deltas_tx[:2]) == \
-               rxtx_db.get_tx_gb(sc_tx['id'], 'ne/1', 'eth0')
+        assert sum(deltas_rx[:2]) == rxtx_db.get_rx(sc_rx['id'], 'ne/1', 'eth0')
+        assert sum(deltas_tx[:2]) == rxtx_db.get_tx(sc_tx['id'], 'ne/1', 'eth0')
 
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc_rx)
         assert None is nem.network_tx_above_thld(sc_tx)
 
         # An extra XGB of data transmitted on the default gw.
-        gb_rx += deltas_rx[2]
-        gb_tx += deltas_tx[2]
+        bytes_rx += deltas_rx[2]
+        bytes_tx += deltas_tx[2]
 
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
@@ -759,8 +767,8 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
-                               'bytes-transmitted': gb_to_bytes(gb_tx),
-                               'bytes-received': gb_to_bytes(gb_rx)},
+                               'bytes-transmitted': bytes_tx,
+                               'bytes-received': bytes_rx},
                               {'interface': 'lo',
                                'bytes-transmitted': 63742086112,
                                'bytes-received': 63742086112
@@ -769,19 +777,18 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
         rxtx_db.update(nerm, [sc_rx, sc_tx])
 
-        assert sum(deltas_rx[:3]) == \
-               rxtx_db.get_rx_gb(sc_rx['id'], 'ne/1', 'eth0')
-        assert sum(deltas_tx[:3]) == \
-               rxtx_db.get_tx_gb(sc_tx['id'], 'ne/1', 'eth0')
+        assert sum(deltas_rx[:3]) == rxtx_db.get_rx(sc_rx['id'], 'ne/1', 'eth0')
+        assert sum(deltas_tx[:3]) == rxtx_db.get_tx(sc_tx['id'], 'ne/1', 'eth0')
 
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
-        assert {'interface': 'eth0', 'value': sum(deltas_rx[:3])} == \
+        assert {'interface': 'eth0',
+                'value': sum(deltas_rx[:3])} == \
                nem.network_rx_above_thld(sc_rx)
         assert None is nem.network_rx_above_thld(sc_rx)
 
         # An extra XGB of data transmitted on the default gw.
-        gb_rx += deltas_rx[3]
-        gb_tx += deltas_tx[3]
+        bytes_rx += deltas_rx[3]
+        bytes_tx += deltas_tx[3]
 
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
@@ -796,8 +803,8 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
             'RESOURCES': {'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'},
                           'net-stats': [
                               {'interface': 'eth0',
-                               'bytes-transmitted': gb_to_bytes(gb_tx),
-                               'bytes-received': gb_to_bytes(gb_rx)},
+                               'bytes-transmitted': bytes_tx,
+                               'bytes-received': bytes_rx},
                               {'interface': 'lo',
                                'bytes-transmitted': 63742086112,
                                'bytes-received': 63742086112
@@ -806,18 +813,16 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
                 'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}})
         rxtx_db.update(nerm, [sc_rx, sc_tx])
 
-        assert sum(deltas_rx[:4]) == \
-               rxtx_db.get_rx_gb(sc_rx['id'], 'ne/1', 'eth0')
-        assert sum(deltas_tx[:4]) == \
-               rxtx_db.get_tx_gb(sc_tx['id'], 'ne/1', 'eth0')
+        assert sum(deltas_rx[:4]) == rxtx_db.get_rx(sc_rx['id'], 'ne/1', 'eth0')
+        assert sum(deltas_tx[:4]) == rxtx_db.get_tx(sc_tx['id'], 'ne/1', 'eth0')
 
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
 
         assert None is nem.network_rx_above_thld(sc_rx)
         assert True is rxtx_db.get_above_thld(sc_rx['id'], 'ne/1', 'eth0', 'rx')
 
-        assert {'interface': 'eth0', 'value': sum(deltas_tx[:4])} == \
-               nem.network_tx_above_thld(sc_tx)
+        assert {'interface': 'eth0',
+                'value': sum(deltas_tx[:4])} == nem.network_tx_above_thld(sc_tx)
         assert True is rxtx_db.get_above_thld(sc_tx['id'], 'ne/1', 'eth0', 'tx')
 
     def test_match_rx_full_workflow(self):
@@ -851,51 +856,58 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
                 'kind': 'numeric'
             }})
         nerm = NuvlaEdgeMetrics({})
-        rxtx_db.update(nerm, [sc['id']])
-        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
-        assert None is nem.network_rx_above_thld(sc)
-
-        nerm = NuvlaEdgeMetrics({
-            'id': 'ne/1',
-            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
-            'RESOURCES': {'net-stats': [
-                {'interface': 'eth0',
-                 'bytes-transmitted': 1 * 1024 ** 2,
-                 'bytes-received': 2 * 1024 ** 2}]}})
         rxtx_db.update(nerm, [sc])
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
-        rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
-        assert 0 == rx.total()
 
-        nerm = NuvlaEdgeMetrics({
-            'id': 'ne/1',
-            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
-            'RESOURCES': {'net-stats': [
-                {'interface': 'eth0',
-                 'bytes-transmitted': gb_to_bytes(1),
-                 'bytes-received': gb_to_bytes(2)}]}})
-        rxtx_db.update(nerm, [sc])
-        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
-        assert None is nem.network_rx_above_thld(sc)
-        rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
-        assert 2.0 == bytes_to_gb(rx.total())
-
-        # counter reset
+        initial_bytes = mb_to_bytes(2)
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
             'RESOURCES': {'net-stats': [
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
-                 'bytes-received': 300 * 1024 ** 2}]}})
+                 'bytes-received': initial_bytes}]}})
         rxtx_db.update(nerm, [sc])
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
-        assert 2.3 == round(bytes_to_gb(rx.total()), 1)
+        assert 0 == rx.total()
 
-        # above threshold
+        total_delta = 0
+        current_delta = gb_to_bytes(2) - initial_bytes
+        nerm = NuvlaEdgeMetrics({
+            'id': 'ne/1',
+            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': 0,
+                 'bytes-received': initial_bytes + current_delta}]}})
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
+        assert None is nem.network_rx_above_thld(sc)
+        rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
+        total_delta += current_delta
+        assert total_delta == rx.total()
+
+        # counter reset
+        current_delta = mb_to_bytes(300)
+        nerm = NuvlaEdgeMetrics({
+            'id': 'ne/1',
+            'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
+            'RESOURCES': {'net-stats': [
+                {'interface': 'eth0',
+                 'bytes-transmitted': 0,
+                 'bytes-received': current_delta}]}})
+        rxtx_db.update(nerm, [sc])
+        nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
+        assert None is nem.network_rx_above_thld(sc)
+        rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
+        total_delta += current_delta
+        assert total_delta == rx.total()
+
+        # move above threshold
+        current_delta = gb_to_bytes(4) - mb_to_bytes(300)
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
@@ -905,28 +917,27 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
                  'bytes-received': gb_to_bytes(4)}]}})
         rxtx_db.update(nerm, [sc])
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
-        value_bytes = gb_to_bytes(6)
-        value_gb = bytes_to_gb(value_bytes)
-        assert {'interface': 'eth0', 'value': value_gb} == \
-               nem.network_rx_above_thld(sc)
+        total_delta += current_delta
+        assert {'interface': 'eth0',
+                'value': total_delta} == nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
-        assert value_gb == bytes_to_gb(rx.total())
+        assert total_delta == rx.total()
 
         # continuing above threshold, but not reporting it.
+        current_delta = gb_to_bytes(1)
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
             'RESOURCES': {'net-stats': [
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
-                 'bytes-received': gb_to_bytes(5)}]}})
+                 'bytes-received': gb_to_bytes(4) + current_delta}]}})
         rxtx_db.update(nerm, [sc])
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
-        value_bytes = gb_to_bytes(7)
-        value_gb = bytes_to_gb(value_bytes)
+        total_delta += current_delta
         assert None is nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
-        assert value_gb == bytes_to_gb(rx.total())
+        assert total_delta == rx.total()
 
         # artificially resetting network above threshold triggers the
         # network above threshold again when new metrics come.
@@ -934,21 +945,22 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
         rx: RxTx = rxtx_db.get_data(sc['id'], nerm['id'], 'eth0', 'rx')
         assert False is rx.get_above_thld()
 
+        current_delta = gb_to_bytes(1)
         nerm = NuvlaEdgeMetrics({
             'id': 'ne/1',
             'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
             'RESOURCES': {'net-stats': [
                 {'interface': 'eth0',
                  'bytes-transmitted': 0,
-                 'bytes-received': gb_to_bytes(6)}]}})
+                 'bytes-received': gb_to_bytes(5) + current_delta}]}})
         rxtx_db.update(nerm, [sc])
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
-        value_gb = bytes_to_gb(gb_to_bytes(8))
-        assert {'interface': 'eth0', 'value': value_gb} == \
+        total_delta += current_delta
+        assert {'interface': 'eth0', 'value': total_delta} == \
                nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], nerm['id'], 'eth0', 'rx')
         assert True is rx.get_above_thld()
-        assert value_gb == bytes_to_gb(rx.total())
+        assert total_delta == rx.total()
 
     def test_net_multiple_successive_subs_triggered(self):
         """
