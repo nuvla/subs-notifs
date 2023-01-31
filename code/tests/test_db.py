@@ -26,32 +26,18 @@ elasticmock = get_elasticmock()
 import nuvla.notifs.window as window
 window_now_orig = datetime.now
 
-from nuvla.notifs.db import RxTxDriverES, bytes_to_gb, \
-    gb_to_bytes, DBInconsistentStateError
+from nuvla.notifs.db import RxTxDriverES, gb_to_bytes, DBInconsistentStateError
 from nuvla.notifs.schema.rxtx import RxTx, RxTxEntry
 
 
 class TestDBUtils(unittest.TestCase):
-
-    def test_bytes_to_gb(self):
-        assert 0 == bytes_to_gb(1)
-        assert 0 == bytes_to_gb(1024**1)
-        assert 0 == bytes_to_gb(1024**2)
-        assert 1 == bytes_to_gb(1024**3)
-        assert 3 == bytes_to_gb(3*1024**3)
-        assert 1.5 == bytes_to_gb(1024**3 + 510*1024**2)
 
     def test_gb_to_bytes(self):
         assert 0 == gb_to_bytes(0.0)
         assert 1 * 1024 ** 3 == gb_to_bytes(1.)
         assert 1288490188 == gb_to_bytes(1.2)
         assert 5057323991 == gb_to_bytes(4.71)
-
-    def test_gb_to_bytes_to_gb(self):
-        assert 0 == bytes_to_gb(gb_to_bytes(0.0))
-        assert 1.0 == bytes_to_gb(gb_to_bytes(1.0))
-        assert 1.2 == bytes_to_gb(gb_to_bytes(1.2))
-        assert 4.71 == bytes_to_gb(gb_to_bytes(4.71))
+        assert 41875931 == gb_to_bytes(0.039)
 
 
 class TestRxTxDriverESDataMgmt(unittest.TestCase):
@@ -199,7 +185,6 @@ class TestRxTxDriverESMocked(TestRxTxDriverESMockedBase):
                          'kind': kind,
                          'value': value}))
         self.driver.set(rx_entry)
-        print(self.driver.index_count())
         assert 2 == self.driver.index_count()
 
         rxtx = self.driver.get_data(subs_id_2, ne_id, iface, kind)

@@ -7,7 +7,7 @@ components of Nuvla the user has access to.
 import traceback
 from typing import Dict, Union, List
 
-from nuvla.notifs.db import RxTxDB
+from nuvla.notifs.db import RxTxDB, gb_to_bytes
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound
 from nuvla.notifs.event import Event
@@ -19,14 +19,14 @@ from nuvla.notifs.subscription import SubscriptionCfg
 log = get_logger('matcher')
 
 
-def ge(val: Union[int, float], sc: SubscriptionCfg) -> bool:
-    """greater than or equal"""
-    return val >= sc.criteria_value()
+def gt(val_bytes: Union[int, float], sc: SubscriptionCfg) -> bool:
+    """greater than"""
+    return val_bytes > gb_to_bytes(sc.criteria_value())
 
 
-def le(val: Union[int, float], sc: SubscriptionCfg) -> bool:
-    """less than or equal"""
-    return val <= sc.criteria_value()
+def lt(val_bytes: Union[int, float], sc: SubscriptionCfg) -> bool:
+    """less than"""
+    return val_bytes < gb_to_bytes(sc.criteria_value())
 
 
 NETWORK_METRIC_PREFIX = 'network-'
@@ -224,17 +224,17 @@ class NuvlaEdgeSubsCfgMatcher:
     def network_tx_above_thld(self, sc: SubscriptionCfg) -> Union[None, Dict]:
         return self._network_rxtx_above_thld(sc, 'tx')
 
-    def get_rxtx_gb(self, subs_cfg: SubscriptionCfg, dev_name, kind) -> \
+    def get_rxtx(self, subs_cfg: SubscriptionCfg, dev_name, kind) -> \
             Union[None, int]:
         if self._net_db is None:
             log.debug('network db not defined ... return')
             return None
         if kind == 'rx':
-            return self._net_db.get_rx_gb(subs_cfg['id'], self.metrics_id(),
-                                          dev_name)
+            return self._net_db.get_rx(subs_cfg['id'], self.metrics_id(),
+                                       dev_name)
         if kind == 'tx':
-            return self._net_db.get_tx_gb(subs_cfg['id'], self.metrics_id(),
-                                          dev_name)
+            return self._net_db.get_tx(subs_cfg['id'], self.metrics_id(),
+                                       dev_name)
         return None
 
     def is_rxtx_above_thld(self, sc: SubscriptionCfg, iface, kind) -> bool:
@@ -286,7 +286,7 @@ class NuvlaEdgeSubsCfgMatcher:
             return None
 
         try:
-            val = self.get_rxtx_gb(sc, dev_name, kind)
+            val = self.get_rxtx(sc, dev_name, kind)
         except KeyError as ex:
             log.warning('No such key %s when getting rxtx from db', ex)
             return None
@@ -294,13 +294,14 @@ class NuvlaEdgeSubsCfgMatcher:
         if val is None:
             return None
 
-        if ge(val, sc) and not self.is_rxtx_above_thld(sc, dev_name, kind):
+        if gt(val, sc) and not self.is_rxtx_above_thld(sc, dev_name, kind):
             self.set_rxtx_above_thld(sc, dev_name, kind)
             return {'interface': dev_name, 'value': val}
 
-        # FIXME: enable reset when migrated to work with bytes instead of Gbs.
-        # if le(val, sc) and self.is_rxtx_above_thld(sc, dev_name, kind):
-        #     self.reset_rxtx_above_thld(sc, dev_name, kind)
+        # 'above threshold' event was already registered, but then the
+        # threshold in the subscription configuration was increased.
+        if self.is_rxtx_above_thld(sc, dev_name, kind) and lt(val, sc):
+            self.reset_rxtx_above_thld(sc, dev_name, kind)
 
     def _went_offline(self):
         if self._m.get('ONLINE_PREV') and not self._m.get('ONLINE'):

@@ -398,16 +398,6 @@ class RxTxDB:
         if tx_data:
             return tx_data.total()
 
-    def get_tx_gb(self, subs_id, ne_id, iface) -> Union[None, float]:
-        tx = self.get_tx(subs_id, ne_id, iface)
-        if tx:
-            return bytes_to_gb(tx)
-
-    def get_rx_gb(self, subs_id, ne_id, iface) -> Union[None, float]:
-        rx = self.get_rx(subs_id, ne_id, iface)
-        if rx:
-            return bytes_to_gb(rx)
-
     def set_above_thld(self, subs_id, ne_id, iface, kind):
         self._db.set_above_thld(subs_id, ne_id, iface, kind)
 
