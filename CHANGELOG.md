@@ -4,6 +4,14 @@
 
 ### Changed
 
+## [0.0.6] - 2023-01-31
+
+### Changed
+
+- When matching Rx/Tx, use bytes instead of gigabytes.
+
+### Changed
+
 ## [0.0.5] - 2023-01-30
 
 ### Changed
