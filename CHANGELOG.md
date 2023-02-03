@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Use nuvlabox-status document timestamp in NE on/offline notifications.
+
 ## [0.0.6] - 2023-01-31
 
 ### Changed
