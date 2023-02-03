@@ -109,7 +109,8 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
              'TAGS': ['arch=x86-64'],
              'ONLINE': True,
              'ONLINE_PREV': False,
-             'TIMESTAMP': '2022-08-02T15:21:46Z',
+             'TIMESTAMP': '2022-08-02T15:21:46.321Z',
+             'NUVLA_TIMESTAMP': '2022-08-02T15:25:00.123Z',
              'ACL': {'owners': [user],
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
@@ -123,6 +124,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert res['recovery'] is True
         assert res['value'] == ''
         assert res['condition_value'] == ''
+        assert res['timestamp'] == '2022-08-02T15:25:00Z'
 
         metrics = NuvlaEdgeMetrics(
             {'id': 'nuvlabox/01',
@@ -132,6 +134,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
              'ONLINE': False,
              'ONLINE_PREV': True,
              'TIMESTAMP': '2022-08-02T15:21:46Z',
+             'NUVLA_TIMESTAMP': '2022-08-02T15:25:01.999Z',
              'ACL': {'owners': [user],
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
@@ -145,6 +148,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         assert res['recovery'] is False
         assert res['value'] == ''
         assert res['condition_value'] == ''
+        assert res['timestamp'] == '2022-08-02T15:25:01Z'
 
     def test_builder_ne_disk(self):
         thld = 80

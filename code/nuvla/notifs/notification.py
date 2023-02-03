@@ -48,7 +48,16 @@ class NuvlaEdgeNotification(dict):
                           'resource_description': metrics.description(),
                           'resource_uri': f'edge/{metrics.uuid()}',
                           'timestamp': metrics.timestamp(),
+                          'nuvla_timestamp': metrics.nuvla_timestamp(),
                           'recovery': False})
+
+    def timestamp_as_nuvla_timestamp(self):
+        self['timestamp'] = self.get('nuvla_timestamp', self['timestamp'])
+
+    def render(self):
+        res = self
+        res.pop('nuvla_timestamp')
+        return res
 
 
 class NuvlaEdgeNotificationBuilder:
@@ -82,8 +91,12 @@ class NuvlaEdgeNotificationBuilder:
         self._n['condition_value'] = condition
         return self
 
+    def timestamp_as_nuvla_timestamp(self):
+        self._n.timestamp_as_nuvla_timestamp()
+        return self
+
     def build(self) -> NuvlaEdgeNotification:
-        return self._n
+        return self._n.render()
 
 
 class BlackboxEventNotification(dict):
