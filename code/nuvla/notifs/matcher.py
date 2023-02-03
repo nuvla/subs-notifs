@@ -369,6 +369,7 @@ class NuvlaEdgeSubsCfgMatcher:
             .recovery(res_m.get('recovery', False)) \
             .value('') \
             .condition_value('') \
+            .timestamp_as_nuvla_timestamp() \
             .build()
 
     def resource_subscriptions(self, subs_cfgs: List[SubscriptionCfg]) -> \

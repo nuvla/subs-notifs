@@ -29,8 +29,19 @@ class Resource(dict):
     def description(self):
         return self['description']
 
+    def _canonical_timestamp(self, name):
+        if '.' in self[name]:
+            return self[name].split('.')[0] + 'Z'
+        return self[name]
+
     def timestamp(self):
-        return self['timestamp']
+        return self._canonical_timestamp('timestamp')
+
+    def nuvla_timestamp(self):
+        try:
+            return self._canonical_timestamp('nuvla_timestamp')
+        except KeyError:
+            return self.timestamp()
 
     def uuid(self):
         return self['id'].split('/')[1]

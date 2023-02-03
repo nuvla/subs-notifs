@@ -49,6 +49,38 @@ class TestResourceSubsConfigMatcher(unittest.TestCase):
         assert False is rscm.resource_subscribed(Resource({}),
                                                  SubscriptionCfg({}))
 
+    def test_timestamps(self):
+        r = Resource({})
+        self.assertRaises(KeyError, r.timestamp)
+        self.assertRaises(KeyError, r.nuvla_timestamp)
+
+        r = Resource({'timestamp': '', 'nuvla_timestamp': ''})
+        assert '' == r.timestamp()
+        assert '' == r.nuvla_timestamp()
+
+        r = Resource({'timestamp': '2022-08-02T15:25:01Z',
+                      'nuvla_timestamp': '2022-08-02T15:25:02Z'})
+        assert '2022-08-02T15:25:01Z' == r.timestamp()
+        assert '2022-08-02T15:25:02Z' == r.nuvla_timestamp()
+
+        r = Resource({'timestamp': '2022-08-02T15:25:01.123Z',
+                      'nuvla_timestamp': '2022-08-02T15:25:02Z'})
+        assert '2022-08-02T15:25:01Z' == r.timestamp()
+        assert '2022-08-02T15:25:02Z' == r.nuvla_timestamp()
+
+        r = Resource({'timestamp': '2022-08-02T15:25:01Z',
+                      'nuvla_timestamp': '2022-08-02T15:25:02.999Z'})
+        assert '2022-08-02T15:25:01Z' == r.timestamp()
+        assert '2022-08-02T15:25:02Z' == r.nuvla_timestamp()
+
+        r = Resource({'timestamp': '2022-08-02T15:25:01Z'})
+        assert '2022-08-02T15:25:01Z' == r.timestamp()
+        assert '2022-08-02T15:25:01Z' == r.nuvla_timestamp()
+
+        r = Resource({'nuvla_timestamp': '2022-08-02T15:25:02.777Z'})
+        self.assertRaises(KeyError, r.timestamp)
+        assert '2022-08-02T15:25:02Z' == r.nuvla_timestamp()
+
     def test_resource_subscribed(self):
         r = Resource({'acl': {'owners': ['me']},
                       'foo': ['bar']})
