@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Fix: translate Rx/Tx value to Gb from Bytes for notification.
+
 ## [0.0.7] - 2023-03-03
 
 ### Changed

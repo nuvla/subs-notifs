@@ -7,7 +7,7 @@ components of Nuvla the user has access to.
 import traceback
 from typing import Dict, Union, List
 
-from nuvla.notifs.db import RxTxDB, gb_to_bytes
+from nuvla.notifs.db import RxTxDB, gb_to_bytes, bytes_to_gb
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound
 from nuvla.notifs.event import Event
@@ -296,7 +296,7 @@ class NuvlaEdgeSubsCfgMatcher:
 
         if gt(val, sc) and not self.is_rxtx_above_thld(sc, dev_name, kind):
             self.set_rxtx_above_thld(sc, dev_name, kind)
-            return {'interface': dev_name, 'value': val}
+            return {'interface': dev_name, 'value': bytes_to_gb(val)}
 
         # 'above threshold' event was already registered, but then the
         # threshold in the subscription configuration was increased.
