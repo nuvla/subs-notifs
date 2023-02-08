@@ -5,6 +5,7 @@ from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
     NuvlaEdgeNotification
 from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.db import gb_to_bytes
 
 user = 'user/00000000-0000-0000-0000-000000000000'
 
@@ -12,12 +13,13 @@ user = 'user/00000000-0000-0000-0000-000000000000'
 class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
 
     def test_builder_numeric_network(self):
+        cond_value = '5.1'
         sc = SubscriptionCfg({
-            'id': 'subscription-config/11111111-2222-3333-4444-555555555555',
+            'id': 'subscription-config/01',
             'name': 'nb Rx',
             'description': 'nb network cumulative Rx over 30 days',
             'method-ids': [
-                'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+                'notification-method/01'
             ],
             'acl': {
                 'owners': [
@@ -26,7 +28,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
             'criteria': {
                 'metric': 'RxGb',
                 'condition': '>',
-                'value': '5',
+                'value': cond_value,
                 'kind': 'numeric',
                 'window': 'monthly',
                 'dev-name': 'eth0'
@@ -37,14 +39,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
              'DESCRIPTION': 'None - self-registration number 220171415421241',
              'TAGS': ['arch=x86-64'],
              'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
-             'ONLINE': True,
-             'ONLINE_PREV': True,
-             'RESOURCES': {'CPU': {'load': 5.52, 'capacity': 4, 'topic': 'cpu'},
-                           'RAM': {'used': 713, 'capacity': 925,
-                                   'topic': 'ram'},
-                           'DISKS': [{'used': 9, 'capacity': 15,
-                                      'device': 'mmcblk0p2'}],
-                           'NET-STATS': [
+             'RESOURCES': {'NET-STATS': [
                                {'interface': 'eth0',
                                 'bytes-transmitted': 0,
                                 'bytes-received': 0},
@@ -52,37 +47,72 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                 'bytes-transmitted': 63742086112,
                                 'bytes-received': 63742086112
                                 }]},
-             'RESOURCES_PREV': {
-                 'CPU': {'load': 5.56, 'capacity': 4, 'topic': 'cpu'},
-                 'RAM': {'used': 712, 'capacity': 925, 'topic': 'ram'},
-                 'DISKS': [{'used': 9, 'capacity': 15, 'device': 'mmcblk0p2'}]},
-             'RESOURCES_CPU_LOAD_PERS': 138.0,
-             'RESOURCES_RAM_USED_PERS': 77,
-             'RESOURCES_DISK1_USED_PERS': 60,
-             'RESOURCES_PREV_CPU_LOAD_PERS': 139.0,
-             'RESOURCES_PREV_RAM_USED_PERS': 76,
-             'RESOURCES_PREV_DISK1_USED_PERS': 60,
              'TIMESTAMP': '2022-08-02T15:21:46Z',
              'ACL': {'owners': [user],
                      'view-data': ['group/elektron',
                                    'infrastructure-service/eb8e09c2-8387-4f6d-86a4-ff5ddf3d07d7',
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
-        notif = notif_builder.metric_name('RxGB').value(123).recovery(True).build()
-        assert {'id': 'subscription-config/11111111-2222-3333-4444-555555555555',
-                'subs_id': 'subscription-config/11111111-2222-3333-4444-555555555555',
+        value = gb_to_bytes(float(cond_value)) + 12 * 1024 ** 2
+        notif = notif_builder.metric_name('RxGB').value_rxtx_adjusted(value).recovery(True).build()
+        assert {'id': 'subscription-config/01',
+                'subs_id': 'subscription-config/01',
                 'subs_name': 'nb Rx',
-                'method_ids': ['notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'],
+                'method_ids': ['notification-method/01'],
                 'subs_description': 'nb network cumulative Rx over 30 days',
                 'condition': '>',
-                'condition_value': '5',
+                'condition_value': '5.1',
                 'resource_name': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
                 'resource_description': 'None - self-registration number 220171415421241',
                 'resource_uri': 'edge/01',
                 'timestamp': '2022-08-02T15:21:46Z',
                 'recovery': True,
                 'metric': 'RxGB',
-                'value': 123} == notif
+                'value': round(float(cond_value) + 0.01, 2)} == notif
+
+    def test_builder_value_rxtx_adjusted(self):
+        metric = {'id': 'nuvlabox/01',
+                  'NAME': 'NE',
+                  'DESCRIPTION': 'NE',
+                  'TAGS': ['arch=x86-64'],
+                  'NETWORK': {NuvlaEdgeMetrics.DEFAULT_GW_KEY: 'eth0'},
+                  'RESOURCES': {'NET-STATS': [
+                      {'interface': 'eth0',
+                       'bytes-transmitted': 0,
+                       'bytes-received': 0}]},
+                  'TIMESTAMP': '2022-08-02T15:21:46Z',
+                  'ACL': {'owners': [user],
+                          'view-data': ['group/elektron',
+                                        'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}}
+        metrics = NuvlaEdgeMetrics(metric)
+        subs_conf = {
+            'id': 'subscription-config/01',
+            'name': 'nb Rx',
+            'description': 'nb network cumulative Rx over 30 days',
+            'method-ids': [
+                'notification-method/01'
+            ],
+            'acl': {
+                'owners': [
+                    user
+                ]},
+            'criteria': {
+                'metric': 'RxGb',
+                'condition': '>',
+                'value': None,
+                'kind': 'numeric',
+                'window': 'monthly',
+                'dev-name': 'eth0'
+            }}
+        for cond_val, delta_bytes in [('0.001', 1234), ('5', 1), ('1.039', 96)]:
+            subs_conf['criteria']['value'] = cond_val
+            sc = SubscriptionCfg(subs_conf)
+            notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
+            value = gb_to_bytes(float(cond_val)) + delta_bytes
+            notif = notif_builder.value_rxtx_adjusted(value).build()
+            assert float(cond_val) == float(notif['condition_value'])
+            assert isinstance(notif['value'], float)
+            assert notif['value'] > float(cond_val)
 
     def test_builder_ne_onoff(self):
         sc = SubscriptionCfg({

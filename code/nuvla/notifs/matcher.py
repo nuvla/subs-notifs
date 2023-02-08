@@ -321,21 +321,24 @@ class NuvlaEdgeSubsCfgMatcher:
                 return self.MATCHED_RECOVERY
         return None
 
-    def notif_build_net_rx(self, sc: SubscriptionCfg,
-                           res_m: dict) -> NuvlaEdgeNotification:
+    def _notif_build_net_rxtx(self, sc: SubscriptionCfg,
+                              res_m: dict, kind: str) -> NuvlaEdgeNotification:
+        """Current value of the metric is provided in Bytes. The user defined
+        threshold is in Gb. Adjustment for a proper current value in Gb for the
+        notification message are applied."""
         return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .metric_name(f'{res_m["interface"]} Rx above') \
-            .value(res_m['value']) \
+            .metric_name(f'{res_m["interface"]} {kind.capitalize()} above') \
+            .value_rxtx_adjusted(res_m['value']) \
             .recovery(res_m.get('recovery', False)) \
             .build()
 
+    def notif_build_net_rx(self, sc: SubscriptionCfg,
+                           res_m: dict) -> NuvlaEdgeNotification:
+        return self._notif_build_net_rxtx(sc, res_m, 'rx')
+
     def notif_build_net_tx(self, sc: SubscriptionCfg,
                            res_m: dict) -> NuvlaEdgeNotification:
-        return NuvlaEdgeNotificationBuilder(sc, self._m) \
-            .metric_name(f'{res_m["interface"]} Tx above') \
-            .value(res_m['value']) \
-            .recovery(res_m.get('recovery', False)) \
-            .build()
+        return self._notif_build_net_rxtx(sc, res_m, 'tx')
 
     def notif_build_load(self, sc: SubscriptionCfg,
                          res_m: dict) -> NuvlaEdgeNotification:

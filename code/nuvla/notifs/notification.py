@@ -6,6 +6,7 @@ from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.subscription import SubscriptionCfg
 from nuvla.notifs.resource import Resource
+from nuvla.notifs.db import bytes_to_gb
 
 log = get_logger('notification')
 
@@ -77,6 +78,14 @@ class NuvlaEdgeNotificationBuilder:
 
     def value(self, value: Union[int, float]):
         self._n['value'] = value
+        return self
+
+    def value_rxtx_adjusted(self, value: Union[int, float]):
+        cond_val = str(self._n['condition_value'])
+        ndigits = '.' in cond_val and len(cond_val.split('.')[1]) or 1
+        while float(cond_val) >= bytes_to_gb(value, ndigits) and ndigits < 10:
+            ndigits += 1
+        self._n['value'] = bytes_to_gb(value, ndigits)
         return self
 
     def recovery(self, recovery: bool):

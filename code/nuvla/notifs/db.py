@@ -68,8 +68,8 @@ es_logger.setLevel(logging.DEBUG)
 es_logger.addHandler(stdout_handler)
 
 
-def bytes_to_gb(value_bytes: int) -> float:
-    return round(value_bytes / math.pow(1024, 3), 2)
+def bytes_to_gb(value_bytes: int, ndigits=2) -> float:
+    return round(value_bytes / math.pow(1024, 3), ndigits)
 
 
 def gb_to_bytes(value_gb: float) -> int:
