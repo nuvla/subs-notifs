@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Provide units for network metrics.
+
 ## [0.0.8] - 2023-03-08
 
 ### Changed

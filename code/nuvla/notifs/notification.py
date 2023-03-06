@@ -6,7 +6,6 @@ from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.subscription import SubscriptionCfg
 from nuvla.notifs.resource import Resource
-from nuvla.notifs.db import bytes_to_gb
 
 log = get_logger('notification')
 
@@ -37,7 +36,10 @@ class NotificationPublisher:
 
 
 class NuvlaEdgeNotification(dict):
+
     def __init__(self, sc: SubscriptionCfg, metrics: Resource):
+        self._sc = sc
+        self._m = metrics
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
@@ -49,16 +51,16 @@ class NuvlaEdgeNotification(dict):
                           'resource_description': metrics.description(),
                           'resource_uri': f'edge/{metrics.uuid()}',
                           'timestamp': metrics.timestamp(),
-                          'nuvla_timestamp': metrics.nuvla_timestamp(),
                           'recovery': False})
 
     def timestamp_as_nuvla_timestamp(self):
-        self['timestamp'] = self.get('nuvla_timestamp', self['timestamp'])
+        self['timestamp'] = self._m.nuvla_timestamp() or self['timestamp']
+
+    def is_network_metric(self):
+        return self._sc.is_network_metric()
 
     def render(self):
-        res = self
-        res.pop('nuvla_timestamp')
-        return res
+        return self
 
 
 class NuvlaEdgeNotificationBuilder:
@@ -80,12 +82,30 @@ class NuvlaEdgeNotificationBuilder:
         self._n['value'] = value
         return self
 
+    @staticmethod
+    def convert_bytes(byte_val: int, cond_val_gb: float) -> str:
+        ndigits = 2
+        ndigits_max = 10
+        if byte_val >= 1024 ** 3:
+            ndigits = cond_val_gb >= 1.0 and len(
+                str(cond_val_gb).split('.')[1]) or ndigits
+            while cond_val_gb >= round(byte_val / 1024 ** 3,
+                                       ndigits) and ndigits < ndigits_max:
+                ndigits += 1
+            return str(round(byte_val / 1024 ** 3, ndigits)) + ' GiB'
+        elif byte_val >= 1024 ** 2:
+            while cond_val_gb >= round(byte_val / 1024 ** 2,
+                                       ndigits) and ndigits < ndigits_max:
+                ndigits += 1
+            return str(round(byte_val / 1024 ** 2, ndigits)) + ' MiB'
+        elif byte_val >= 1024:
+            return str(round(byte_val / 1024, ndigits)) + ' KiB'
+        else:
+            return str(byte_val) + ' bytes'
+
     def value_rxtx_adjusted(self, value: Union[int, float]):
-        cond_val = str(self._n['condition_value'])
-        ndigits = '.' in cond_val and len(cond_val.split('.')[1]) or 1
-        while float(cond_val) >= bytes_to_gb(value, ndigits) and ndigits < 10:
-            ndigits += 1
-        self._n['value'] = bytes_to_gb(value, ndigits)
+        self._n['value'] = self.convert_bytes(value,
+                                              float(self._n['condition_value']))
         return self
 
     def recovery(self, recovery: bool):
@@ -105,6 +125,8 @@ class NuvlaEdgeNotificationBuilder:
         return self
 
     def build(self) -> NuvlaEdgeNotification:
+        if self._n.is_network_metric():
+            self._n['condition_value'] = self._n['condition_value'] + ' GiB'
         return self._n.render()
 
 

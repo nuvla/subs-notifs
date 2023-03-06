@@ -14,7 +14,7 @@ from nuvla.notifs.event import Event
 from nuvla.notifs.resource import Resource
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
     NuvlaEdgeNotification, BlackboxEventNotification
-from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.subscription import SubscriptionCfg, NETWORK_METRIC_PREFIX
 
 log = get_logger('matcher')
 
@@ -27,9 +27,6 @@ def gt(val_bytes: Union[int, float], sc: SubscriptionCfg) -> bool:
 def lt(val_bytes: Union[int, float], sc: SubscriptionCfg) -> bool:
     """less than"""
     return val_bytes < gb_to_bytes(sc.criteria_value())
-
-
-NETWORK_METRIC_PREFIX = 'network-'
 
 
 class ResourceSubsCfgMatcher:
@@ -103,7 +100,7 @@ class TaggedResourceNetworkSubsCfgMatcher(TaggedResourceSubsCfgMatcher):
                             with_disabled=True) -> bool:
         return super().resource_subscribed(resource, subs_cfg,
                                            with_disabled) and \
-               subs_cfg.criteria_metric().startswith(NETWORK_METRIC_PREFIX)
+               subs_cfg.is_network_metric()
 
 
 def metric_not_found_ex_handler(func):
@@ -296,7 +293,7 @@ class NuvlaEdgeSubsCfgMatcher:
 
         if gt(val, sc) and not self.is_rxtx_above_thld(sc, dev_name, kind):
             self.set_rxtx_above_thld(sc, dev_name, kind)
-            return {'interface': dev_name, 'value': bytes_to_gb(val)}
+            return {'interface': dev_name, 'value': val}
 
         # 'above threshold' event was already registered, but then the
         # threshold in the subscription configuration was increased.
