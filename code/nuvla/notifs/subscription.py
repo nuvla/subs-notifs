@@ -23,6 +23,8 @@ RESOURCE_KIND_DATARECORD = 'data-record'
 RESOURCE_KINDS = [v for k, v in globals().items() if
                   k.startswith('RESOURCE_KIND_')]
 
+NETWORK_METRIC_PREFIX = 'network-'
+
 
 class RequiredAttributedMissing(KeyError):
 
@@ -139,6 +141,9 @@ class SubscriptionCfg(dict):
 
     def is_metric_cond(self, metric: str, cond: str) -> bool:
         return self.is_metric(metric) and self.is_condition(cond)
+
+    def is_network_metric(self):
+        return self.criteria_metric().startswith(NETWORK_METRIC_PREFIX)
 
     def _owner(self):
         owners = self.get('acl', {}).get('owners', [])

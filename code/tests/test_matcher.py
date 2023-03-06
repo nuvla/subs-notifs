@@ -813,7 +813,7 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
 
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         assert {'interface': 'eth0',
-                'value': bytes_to_gb(sum(deltas_rx[:3]))} == \
+                'value': sum(deltas_rx[:3])} == \
                nem.network_rx_above_thld(sc_rx)
         assert None is nem.network_rx_above_thld(sc_rx)
 
@@ -853,7 +853,7 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
         assert True is rxtx_db.get_above_thld(sc_rx['id'], 'ne/1', 'eth0', 'rx')
 
         assert {'interface': 'eth0',
-                'value': bytes_to_gb(sum(deltas_tx[:4]))} == \
+                'value': sum(deltas_tx[:4])} == \
                nem.network_tx_above_thld(sc_tx)
         assert True is rxtx_db.get_above_thld(sc_tx['id'], 'ne/1', 'eth0', 'tx')
 
@@ -951,7 +951,7 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         total_delta += current_delta
         assert {'interface': 'eth0',
-                'value': bytes_to_gb(total_delta)} == nem.network_rx_above_thld(sc)
+                'value': total_delta} == nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], 'ne/1', 'eth0', 'rx')
         assert total_delta == rx.total()
 
@@ -988,7 +988,7 @@ class TestNuvlaEdgeSubsCfgMatcherDB(TestRxTxDriverESMockedBase):
         rxtx_db.update(nerm, [sc])
         nem = NuvlaEdgeSubsCfgMatcher(nerm, rxtx_db)
         total_delta += current_delta
-        assert {'interface': 'eth0', 'value': bytes_to_gb(total_delta)} == \
+        assert {'interface': 'eth0', 'value': total_delta} == \
                nem.network_rx_above_thld(sc)
         rx: RxTx = rxtx_db.get_data(sc['id'], nerm['id'], 'eth0', 'rx')
         assert True is rx.get_above_thld()

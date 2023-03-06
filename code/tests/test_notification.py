@@ -12,6 +12,54 @@ user = 'user/00000000-0000-0000-0000-000000000000'
 
 class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
 
+    def test_convert_bytes(self):
+        assert '5.01 GiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            5 * 1024 ** 3 + 10 * 1024 ** 2, 5.001)
+
+        # '5.0011 GiB' -> 100 KiB above condition value of 5.001 GiB
+        cond_val_gb = 5.001  # user provided value
+        curr_val_bytes = gb_to_bytes(
+            cond_val_gb) + 100 * 1024  # 100 KiB above condition
+        assert '5.0011 GiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
+        # '5.0010000002 GiB' -> 1 byte above condition value of 5.001 GiB
+        cond_val_gb = 5.001  # user provided value
+        curr_val_bytes = gb_to_bytes(cond_val_gb) + 1  # 1 byte above condition
+        assert '5.0010000002 GiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
+        # '40.03 MiB' -> 100 KiB above condition value of 0.039 GiB (39 MiB)
+        cond_val_gb = 0.039001  # user provided value
+        curr_val_bytes = gb_to_bytes(
+            cond_val_gb) + 100 * 1024  # 100 KiB above condition
+        assert '40.03 MiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
+        # '39.94 MiB' -> 1 byte above condition value of 0.039 GiB (39 MiB)
+        cond_val_gb = 0.039  # user provided value
+        curr_val_bytes = gb_to_bytes(cond_val_gb) + 1  # 1 byte above condition
+        assert '39.94 MiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
+        # '1.02 MiB' -> 1 byte above condition value of 0.001 GiB (1 MiB)
+        cond_val_gb = 0.001  # user provided value
+        curr_val_bytes = gb_to_bytes(cond_val_gb) + 1  # 1 byte above condition
+        assert '1.02 MiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
+        # '1.05 KiB' -> 1 byte above condition value of 0.000001 GiB (1 KiB)
+        cond_val_gb = 0.000001  # user provided value
+        curr_val_bytes = gb_to_bytes(cond_val_gb) + 1  # 1 byte above condition
+        assert '1.05 KiB' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
+        # '108 bytes' -> 1 byte above condition value of 0.0000001 GiB (100 bytes)
+        cond_val_gb = 0.0000001  # user provided value
+        curr_val_bytes = gb_to_bytes(cond_val_gb) + 1  # 1 byte above condition
+        assert '108 bytes' == NuvlaEdgeNotificationBuilder.convert_bytes(
+            curr_val_bytes, cond_val_gb)
+
     def test_builder_numeric_network(self):
         cond_value = '5.1'
         sc = SubscriptionCfg({
@@ -26,7 +74,7 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                     user
                 ]},
             'criteria': {
-                'metric': 'RxGb',
+                'metric': 'network-rx',
                 'condition': '>',
                 'value': cond_value,
                 'kind': 'numeric',
@@ -54,21 +102,26 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                                    'nuvlabox/ac81118b-730b-4df9-894c-f89e50580abd']}})
         notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
         value = gb_to_bytes(float(cond_value)) + 12 * 1024 ** 2
-        notif = notif_builder.metric_name('RxGB').value_rxtx_adjusted(value).recovery(True).build()
+        notif = notif_builder\
+            .metric_name('RxGB')\
+            .value_rxtx_adjusted(value)\
+            .recovery(True)\
+            .build()
+        print(notif)
         assert {'id': 'subscription-config/01',
                 'subs_id': 'subscription-config/01',
                 'subs_name': 'nb Rx',
                 'method_ids': ['notification-method/01'],
                 'subs_description': 'nb network cumulative Rx over 30 days',
                 'condition': '>',
-                'condition_value': '5.1',
+                'condition_value': '5.1 GiB',
                 'resource_name': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
                 'resource_description': 'None - self-registration number 220171415421241',
                 'resource_uri': 'edge/01',
                 'timestamp': '2022-08-02T15:21:46Z',
                 'recovery': True,
                 'metric': 'RxGB',
-                'value': round(float(cond_value) + 0.01, 2)} == notif
+                'value': f'{round(float(cond_value) + 0.01, 2)} GiB'} == notif
 
     def test_builder_value_rxtx_adjusted(self):
         metric = {'id': 'nuvlabox/01',
@@ -97,22 +150,45 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
                     user
                 ]},
             'criteria': {
-                'metric': 'RxGb',
+                'metric': 'network-rx',
                 'condition': '>',
                 'value': None,
                 'kind': 'numeric',
                 'window': 'monthly',
                 'dev-name': 'eth0'
             }}
-        for cond_val, delta_bytes in [('0.001', 1234), ('5', 1), ('1.039', 96)]:
-            subs_conf['criteria']['value'] = cond_val
-            sc = SubscriptionCfg(subs_conf)
-            notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
-            value = gb_to_bytes(float(cond_val)) + delta_bytes
-            notif = notif_builder.value_rxtx_adjusted(value).build()
-            assert float(cond_val) == float(notif['condition_value'])
-            assert isinstance(notif['value'], float)
-            assert notif['value'] > float(cond_val)
+        cond_val, delta_bytes = '0.001', 1234
+        subs_conf['criteria']['value'] = cond_val
+        sc = SubscriptionCfg(subs_conf)
+        notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
+        value = gb_to_bytes(float(cond_val)) + delta_bytes
+        notif = notif_builder.value_rxtx_adjusted(value).build()
+        assert f'{cond_val} GiB' == notif['condition_value']
+        value, unit = notif['value'].split(' ')
+        assert unit == 'MiB'
+        assert float(value) * 1024 ** 2 > float(cond_val) * 1024 ** 3
+
+        cond_val, delta_bytes = '5', 1
+        subs_conf['criteria']['value'] = cond_val
+        sc = SubscriptionCfg(subs_conf)
+        notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
+        value = gb_to_bytes(float(cond_val)) + delta_bytes
+        notif = notif_builder.value_rxtx_adjusted(value).build()
+        assert f'{cond_val} GiB' == notif['condition_value']
+        value, unit = notif['value'].split(' ')
+        assert unit == 'GiB'
+        assert float(value) * 1024 ** 3 > float(cond_val) * 1024 ** 3
+
+        cond_val, delta_bytes = '1.039', 96
+        subs_conf['criteria']['value'] = cond_val
+        sc = SubscriptionCfg(subs_conf)
+        notif_builder = NuvlaEdgeNotificationBuilder(sc, metrics)
+        value = gb_to_bytes(float(cond_val)) + delta_bytes
+        notif = notif_builder.value_rxtx_adjusted(value).build()
+        assert f'{cond_val} GiB' == notif['condition_value']
+        value, unit = notif['value'].split(' ')
+        assert unit == 'GiB'
+        assert float(value) * 1024 ** 3 > float(cond_val) * 1024 ** 3
 
     def test_builder_ne_onoff(self):
         sc = SubscriptionCfg({
