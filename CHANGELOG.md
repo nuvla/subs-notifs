@@ -4,15 +4,19 @@
 
 ### Changed
 
+## [0.0.9] - 2023-03-06
+
+### Changed
+
 - Provide units for network metrics.
 
-## [0.0.8] - 2023-03-08
+## [0.0.8] - 2023-02-08
 
 ### Changed
 
 - Fix: translate Rx/Tx value to Gb from Bytes for notification.
 
-## [0.0.7] - 2023-03-03
+## [0.0.7] - 2023-02-03
 
 ### Changed
 
@@ -38,7 +42,7 @@
 
 ### Changed
 
-- Fix: temporary fix to avoid resets of the above threshold flag in a corner case. 
+- Fix: temporary fix to avoid resets of the above threshold flag in a corner case.
 
 ### Changed
 
@@ -46,7 +50,7 @@
 
 ### Changed
 
-- Refactor subscription matching. 
+- Refactor subscription matching.
 - Enforce stronger requirement on missing required attr of subscription
   configuration.
 
