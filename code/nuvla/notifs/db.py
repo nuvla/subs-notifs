@@ -50,7 +50,7 @@ from typing import Union, List
 
 import elasticsearch
 
-from nuvla.notifs.log import get_logger, stdout_handler
+from nuvla.notifs.log import get_logger, loglevel_from_env, stdout_handler
 from nuvla.notifs.metric import NuvlaEdgeMetrics
 from nuvla.notifs.schema.rxtx import RxTx, RxTxEntry
 from nuvla.notifs.subscription import SubscriptionCfg
@@ -60,11 +60,11 @@ log = get_logger('db')
 import logging
 
 urllib3_logger = logging.getLogger('urllib3')
-urllib3_logger.setLevel(logging.DEBUG)
+urllib3_logger.setLevel(loglevel_from_env('db-urllib3') or logging.INFO)
 urllib3_logger.addHandler(stdout_handler)
 
 es_logger = logging.getLogger('elasticsearch')
-es_logger.setLevel(logging.DEBUG)
+es_logger.setLevel(loglevel_from_env('db-elasticsearch') or logging.INFO)
 es_logger.addHandler(stdout_handler)
 
 

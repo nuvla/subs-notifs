@@ -119,6 +119,7 @@ See [Nuvla](https://github.com/nuvla/deployment) deployment for details.
 | ------------------------ | -------------------------------------------------------------------- |
 | KAFKA_BOOTSTRAP_SERVERS | Comma separated list of Kafka endpoints (eg. kafka1:9092,kafka2:9092) |
 | ES_HOSTS | Comma separated list of Elasticsearch endpoints (eg. es1:9200,es2:9200) |
+| `XYZ`_LOGLEVEL | Per-component loglevel. E.g.: DB_LOGLEVEL, MATCHER_LOGLEVEL. |
 
 
 ## Contributing

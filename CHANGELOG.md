@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Change default loglevel to INFO.
+- Allow setting loglevel from env vars.
+
 ## [0.0.9] - 2023-03-06
 
 ### Changed
