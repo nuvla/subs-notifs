@@ -8,7 +8,9 @@ from nuvla.notifs.log import loglevel_from_env
 class TestLog(unittest.TestCase):
 
     def setUp(self) -> None:
-        for v in ('FOO_LOGLEVEL',
+        for v in ('ALL_LOGLEVEL',
+                  'FOO_LOGLEVEL',
+                  'BAR_LOGLEVEL',
                   'FOO_BAR_BAZ1_LOGLEVEL'):
             if v in os.environ:
                 os.environ.pop(v)
@@ -24,4 +26,17 @@ class TestLog(unittest.TestCase):
         assert None is loglevel_from_env('foo')
 
         os.environ['FOO_BAR_BAZ1_LOGLEVEL'] = 'INFO'
+        assert logging.INFO == loglevel_from_env('foo-bar-baz1')
+
+    def test_all_loglevel(self):
+        os.environ['ALL_LOGLEVEL'] = 'WARNING'
+        assert logging.WARNING == loglevel_from_env('foo')
+        assert logging.WARNING == loglevel_from_env('bar')
+
+        os.environ['ALL_LOGLEVEL'] = 'INFO'
+        os.environ['BAR_LOGLEVEL'] = 'DEBUG'
+        assert logging.DEBUG == loglevel_from_env('bar')
+
+        os.environ['ALL_LOGLEVEL'] = 'INFO'
+        os.environ['FOO_BAR_BAZ1_LOGLEVEL'] = 'bad value'
         assert logging.INFO == loglevel_from_env('foo-bar-baz1')
