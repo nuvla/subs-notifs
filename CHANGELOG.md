@@ -4,6 +4,12 @@
 
 ### Changed
 
+## [0.0.11] - 2023-06-25
+
+### Added
+
+- Allow setting same log level for all components form env vars.
+
 ## [0.0.10] - 2023-06-23
 
 ### Changed
