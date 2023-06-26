@@ -221,10 +221,12 @@ class NuvlaEdgeSubsCfgMatcher:
     def network_tx_above_thld(self, sc: SubscriptionCfg) -> Union[None, Dict]:
         return self._network_rxtx_above_thld(sc, 'tx')
 
+    _MSG_NET_DB_NOT_DEFINED = 'network db not defined ... return'
+
     def get_rxtx(self, subs_cfg: SubscriptionCfg, dev_name, kind) -> \
             Union[None, int]:
         if self._net_db is None:
-            log.debug('network db not defined ... return')
+            log.debug(self._MSG_NET_DB_NOT_DEFINED)
             return None
         if kind == 'rx':
             return self._net_db.get_rx(subs_cfg['id'], self.metrics_id(),
@@ -236,14 +238,14 @@ class NuvlaEdgeSubsCfgMatcher:
 
     def is_rxtx_above_thld(self, sc: SubscriptionCfg, iface, kind) -> bool:
         if self._net_db is None:
-            log.debug('net db not defined ... return')
+            log.debug(self._MSG_NET_DB_NOT_DEFINED)
             return False
         return self._net_db.get_above_thld(sc['id'], self.metrics_id(), iface,
                                            kind)
 
     def set_rxtx_above_thld(self, sc: SubscriptionCfg, iface, kind):
         if self._net_db is None:
-            log.debug('net db not defined ... return')
+            log.debug(self._MSG_NET_DB_NOT_DEFINED)
             return
         self._net_db.set_above_thld(sc['id'], self.metrics_id(), iface, kind)
 
