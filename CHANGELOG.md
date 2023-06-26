@@ -4,6 +4,13 @@
 
 ### Changed
 
+## [0.0.12] - 2023-06-26
+
+### Changed
+
+- Fix: use correct module name in logger init for 'subscription' module.
+
+
 ## [0.0.11] - 2023-06-25
 
 ### Added
