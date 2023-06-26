@@ -55,7 +55,7 @@ class Window:
     Fixed resettable window within which the accumulation of values happens.
     """
 
-    RE_VALID_TIME_WINDOW = re.compile('\d.*d$')
+    RE_VALID_TIME_WINDOW = re.compile(r'\d.*d$')
 
     def __init__(self, ts_window='month', month_day=1):
         """

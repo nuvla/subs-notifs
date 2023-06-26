@@ -293,14 +293,14 @@ class SelfUpdatingDict(LoggingDict):
         t_end = time.time() + timeout
         while self.empty():
             if time.time() >= t_end:
-                raise Exception('Timed out waiting dict is not empty.')
+                raise TimeoutError('Timed out waiting dict is not empty.')
             time.sleep(0.1)
 
     def wait_key_set(self, key, timeout=5):
         t_end = time.time() + timeout
         while key not in self:
             if time.time() >= t_end:
-                raise Exception(f'Timed out waiting {key} to be set.')
+                raise TimeoutError(f'Timed out waiting {key} to be set.')
             time.sleep(0.1)
 
     def wait_keys_set(self, keys=None):
