@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from dateutil import relativedelta
+from typing import Optional
 
 
 def now(tz=None) -> datetime:
@@ -54,7 +55,7 @@ class Window:
     Fixed resettable window within which the accumulation of values happens.
     """
 
-    RE_VALID_TIME_WINDOW = re.compile('[0-9].*d$')
+    RE_VALID_TIME_WINDOW = re.compile('\d.*d$')
 
     def __init__(self, ts_window='month', month_day=1):
         """
@@ -68,8 +69,8 @@ class Window:
             self.month_day = month_day
         else:
             self.month_day = None
-        self._ts_window: str = None
-        self.ts_reset: datetime = None
+        self._ts_window: Optional[str]
+        self.ts_reset: Optional[datetime]
         self.ts_window: str = ts_window
 
     @classmethod
