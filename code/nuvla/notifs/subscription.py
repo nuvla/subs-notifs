@@ -13,7 +13,7 @@ from threading import Lock
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.updater import DictUpdater
 
-log = get_logger('main')
+log = get_logger('subscription')
 
 SUBS_CONF_TOPIC = 'subscription-config'
 
@@ -271,7 +271,7 @@ class SelfUpdatingDict(LoggingDict):
                 try:
                     del self[k][key]
                 except KeyError as ex:
-                    log.warning('Deleting sub-key: no %s under %s', str(ex), k)
+                    log.warning('Deleting sub-key: no key %s under %s', str(ex), k)
         else:
             rk = value.get('resource-kind')
             if rk not in RESOURCE_KINDS:
