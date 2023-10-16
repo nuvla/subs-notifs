@@ -461,6 +461,12 @@ class TestNuvlaEdgeSubsCfgMatcher(unittest.TestCase):
         assert False is nem._went_online()
         assert True is nem._went_offline()
 
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics(
+            {'ONLINE': True,
+             'ONLINE_PREV': None}))
+        assert True is nem._went_online()
+        assert False is nem._went_offline()
+
     def test_match_online(self):
         sc = SubscriptionCfg(
             {'criteria': {
