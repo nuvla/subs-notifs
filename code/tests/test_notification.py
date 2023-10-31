@@ -1,11 +1,11 @@
 import unittest
 
 from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher
-from nuvla.notifs.metric import NuvlaEdgeMetrics
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
     NuvlaEdgeNotification
-from nuvla.notifs.subscription import SubscriptionCfg
-from nuvla.notifs.db import gb_to_bytes
+from nuvla.notifs.models.subscription import SubscriptionCfg
+from nuvla.notifs.db.driver import gb_to_bytes
 
 user = 'user/00000000-0000-0000-0000-000000000000'
 

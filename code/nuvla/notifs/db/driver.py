@@ -51,9 +51,9 @@ from typing import Union, List
 import elasticsearch
 
 from nuvla.notifs.log import get_logger, loglevel_from_env, stdout_handler
-from nuvla.notifs.metric import NuvlaEdgeMetrics
-from nuvla.notifs.schema.rxtx import RxTx, RxTxEntry
-from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics
+from nuvla.notifs.db.schema.rxtx import RxTx, RxTxEntry
+from nuvla.notifs.models.subscription import SubscriptionCfg
 
 log = get_logger('db')
 

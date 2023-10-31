@@ -1,14 +1,14 @@
 import unittest
 
 from test_db import TestRxTxDriverESMockedBase
-from nuvla.notifs.db import RxTxDB, gb_to_bytes, bytes_to_gb
-from nuvla.notifs.schema.rxtx import RxTx
+from nuvla.notifs.db.driver import RxTxDB, gb_to_bytes
+from nuvla.notifs.db.schema.rxtx import RxTx
 from nuvla.notifs.matcher import ResourceSubsCfgMatcher, gt, lt, \
     NuvlaEdgeSubsCfgMatcher, TaggedResourceSubsCfgMatcher, EventSubsCfgMatcher
-from nuvla.notifs.metric import NuvlaEdgeMetrics
-from nuvla.notifs.event import Event
-from nuvla.notifs.resource import Resource
-from nuvla.notifs.subscription import SubscriptionCfg, RequiredAttributedMissing
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics
+from nuvla.notifs.models.event import Event
+from nuvla.notifs.models.resource import Resource
+from nuvla.notifs.models.subscription import SubscriptionCfg, RequiredAttributedMissing
 
 
 def mb_to_bytes(n):

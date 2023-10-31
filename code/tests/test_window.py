@@ -1,8 +1,8 @@
 import unittest
 from datetime import datetime, timedelta
 
-from nuvla.notifs.window import Window
-from nuvla.notifs.window import next_month_this_day, _next_month_same_day
+from nuvla.notifs.db.window import Window
+from nuvla.notifs.db.window import _next_month_this_day, _next_month_same_day
 
 
 class TestNextMonthConversion(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestNextMonthConversion(unittest.TestCase):
                        datetime.fromisoformat(f'2023-01-{i}T00:00:00'))
 
     def test_month_this_day(self):
-        res = next_month_this_day(28)
+        res = _next_month_this_day(28)
         assert 28 == res.day
         assert (datetime.today().month + 1) % 12 == res.month
 
@@ -71,7 +71,7 @@ class TestWindow(unittest.TestCase):
     def test_to_from_dict(self):
         assert {'ts_window': 'month',
                 'month_day': 1,
-                'ts_reset': next_month_this_day(1).timestamp()} == \
+                'ts_reset': _next_month_this_day(1).timestamp()} == \
                Window().to_dict()
 
         win_dict = {'ts_window': '1d',

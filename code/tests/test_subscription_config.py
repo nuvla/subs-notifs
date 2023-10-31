@@ -1,8 +1,9 @@
 import unittest
 
 from fake_updater import get_updater
-from nuvla.notifs.subscription import LoggingDict, SubscriptionCfg, \
-    SelfUpdatingDict, RESOURCE_KINDS, RESOURCE_KIND_NE, RESOURCE_KIND_DATARECORD
+from nuvla.notifs.models.subscription import SubscriptionCfg, \
+    RESOURCE_KINDS, RESOURCE_KIND_NE, RESOURCE_KIND_DATARECORD
+from nuvla.notifs.models.dyndict import LoggingDict, SelfUpdatingDict
 
 
 class TestLoggingDict(unittest.TestCase):

@@ -10,10 +10,11 @@ elasticmock = get_elasticmock()
 
 from fake_updater import get_updater
 from nuvla.notifs.main import es_hosts, ES_HOSTS, populate_ne_net_db
-from nuvla.notifs.metric import NuvlaEdgeMetrics
-from nuvla.notifs.subscription import SelfUpdatingDict, SubscriptionCfg, \
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics
+from nuvla.notifs.models.subscription import SubscriptionCfg, \
     RESOURCE_KIND_NE
-from nuvla.notifs.db import RxTxDB
+from nuvla.notifs.models.dyndict import SelfUpdatingDict
+from nuvla.notifs.db.driver import RxTxDB
 
 
 class TestEsHosts(unittest.TestCase):

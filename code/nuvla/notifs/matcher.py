@@ -7,14 +7,14 @@ components of Nuvla the user has access to.
 import traceback
 from typing import Dict, Union, List
 
-from nuvla.notifs.db import RxTxDB, gb_to_bytes, bytes_to_gb
+from nuvla.notifs.db.driver import RxTxDB, gb_to_bytes
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound
-from nuvla.notifs.event import Event
-from nuvla.notifs.resource import Resource
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics, MetricNotFound
+from nuvla.notifs.models.event import Event
+from nuvla.notifs.models.resource import Resource
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
     NuvlaEdgeNotification, BlackboxEventNotification
-from nuvla.notifs.subscription import SubscriptionCfg, NETWORK_METRIC_PREFIX
+from nuvla.notifs.models.subscription import SubscriptionCfg, NETWORK_METRIC_PREFIX
 
 log = get_logger('matcher')
 

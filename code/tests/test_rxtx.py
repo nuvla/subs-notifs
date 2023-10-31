@@ -1,8 +1,8 @@
 import unittest
 
-from nuvla.notifs.subscription import SubscriptionCfg
-from nuvla.notifs.window import Window
-from nuvla.notifs.schema.rxtx import RxTxEntry
+from nuvla.notifs.models.subscription import SubscriptionCfg
+from nuvla.notifs.db.window import Window
+from nuvla.notifs.db.schema.rxtx import RxTxEntry
 
 
 class TestRxTxEntry(unittest.TestCase):

@@ -12,17 +12,17 @@ import threading
 import traceback
 from typing import List
 
-from nuvla.notifs.db import RxTxDB, RxTxDriverES
+from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SelfUpdatingSubsCfgs, \
+from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
     SubscriptionCfg, SUBS_CONF_TOPIC, RESOURCE_KIND_NE, \
     RESOURCE_KIND_DATARECORD, RESOURCE_KIND_EVENT
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
 from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher, \
     TaggedResourceNetworkSubsCfgMatcher, EventSubsCfgMatcher
-from nuvla.notifs.metric import NuvlaEdgeMetrics
-from nuvla.notifs.event import Event
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics
+from nuvla.notifs.models.event import Event
 
 log = get_logger('main')
 

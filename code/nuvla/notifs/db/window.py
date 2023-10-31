@@ -1,8 +1,8 @@
 import json
 import re
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from dateutil import relativedelta
-from typing import Optional
 
 
 def now(tz=None) -> datetime:
@@ -22,7 +22,7 @@ def _next_month_same_day(date: datetime) -> datetime:
     return date + relativedelta.relativedelta(months=1)
 
 
-def next_month_this_day(day: int) -> datetime:
+def _next_month_this_day(day: int) -> datetime:
     """
     Given `day` of month, returns same day of the next month.
     :param day: int (range [1, 31])
@@ -39,7 +39,7 @@ def _last_day_of_month(any_day) -> int:
     return (next_month - timedelta(days=next_month.day)).day
 
 
-def current_month_this_day(day: int) -> datetime:
+def _current_month_this_day(day: int) -> datetime:
     """
     Given `day` of month, returns the `day` of the current month.
     :param day: int (range [1, 31])
@@ -80,8 +80,8 @@ class Window:
     @staticmethod
     def _this_day(month_day: int) -> datetime:
         if now().day < month_day:
-            return current_month_this_day(month_day)
-        return next_month_this_day(month_day)
+            return _current_month_this_day(month_day)
+        return _next_month_this_day(month_day)
 
     @classmethod
     def _next_reset(cls, window: str, month_day: int = 1) -> datetime:

@@ -3,10 +3,9 @@ from datetime import datetime, timedelta
 
 from mock import Mock
 
-from nuvla.notifs import window
-from nuvla.notifs.schema.rxtx import _RxTxValue, RxTx
-from nuvla.notifs.window import Window, next_month_this_day, \
-    next_month_first_day, current_month_this_day
+from nuvla.notifs.db import window
+from nuvla.notifs.db.schema.rxtx import _RxTxValue, RxTx
+from nuvla.notifs.db.window import Window, next_month_first_day
 from test_db import window_now_orig
 
 

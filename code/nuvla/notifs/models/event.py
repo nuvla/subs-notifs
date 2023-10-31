@@ -3,7 +3,7 @@ Event resource class.
 """
 import re
 
-from nuvla.notifs.resource import Resource
+from nuvla.notifs.models.resource import Resource
 
 
 class Event(Resource):

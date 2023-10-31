@@ -1,11 +1,11 @@
 import json
 from typing import List, Dict, Union
 
-from nuvla.notifs.event import Event
+from nuvla.notifs.models.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SubscriptionCfg
-from nuvla.notifs.resource import Resource
+from nuvla.notifs.models.subscription import SubscriptionCfg
+from nuvla.notifs.models.resource import Resource
 
 log = get_logger('notification')
 
