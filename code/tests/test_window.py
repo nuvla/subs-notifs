@@ -21,7 +21,7 @@ class TestNextMonthConversion(unittest.TestCase):
     def test_month_this_day(self):
         res = _next_month_this_day(28)
         assert 28 == res.day
-        assert (datetime.today().month + 1) % 12 == res.month
+        assert (datetime.today().month % 12 + 1) == res.month
 
 
 class TestWindow(unittest.TestCase):
