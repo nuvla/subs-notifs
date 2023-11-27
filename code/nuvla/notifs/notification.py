@@ -195,7 +195,7 @@ class AppPublishedAppsBouquetUpdateNotification(dict):
 class AppAppBqPublishedDeploymentGroupUpdateNotification(dict):
 
     def __init__(self, depl_group_id: str, sc: SubscriptionCfg, event: Event):
-        _id = depl_group_id.split('/')[1]
+        _id = depl_group_id.split('/')[-1]
         url = f'deployment-groups/{_id}?deployment-groups-detail-tab=apps'
         app = event.resource_content()
         super().__init__({'id': sc['id'],
