@@ -138,8 +138,53 @@ class EventSubsCfgMatcher:
             return [r.data for r in res.resources]
         return []
 
-    def find_deployment_groups_by_application(self, module_id: str, acl_owners: Set):
-        pass
+    @staticmethod
+    def find_deployment_groups_by_application(nuvla: Nuvla, module_id: str,
+            acl_owners: Set) -> List[dict]:
+        """
+        Only deployment groups that have "virtual" application sets are returned.
+
+        :param nuvla: initialised Nuvla API client
+        :param module_id:
+        :param acl_owners:
+        :return:
+        """
+
+        dpl_group_ids = []
+        for owner in acl_owners:
+            flt = f"module/id^='{module_id}' and acl/owners='{owner}' and " \
+                  f"deployment-set!=null"
+            select = ''
+            aggregation = 'terms:deployment-set'
+            try:
+                res = nuvla.search('deployment', filter=flt, select=select,
+                                   aggregation=aggregation)
+            except Exception as ex:
+                log.exception('Failed getting deployments from Nuvla API server: %s',
+                              exc_info=ex)
+                continue
+
+            if not res:
+                continue
+
+            dpl_group_ids.extend(
+                [b['key'] for b in res.data['aggregations']['terms:deployment-set']['buckets']])
+
+        if not dpl_group_ids:
+            return []
+
+        dpl_groups_on_virt_app_set = []
+        # per deployment group get all module 'application'-s from the application set
+        for dpl_grp_id in dpl_group_ids:
+            res = nuvla.get(dpl_grp_id, select='id,applications-sets,acl')
+            dpl_grp = res.data
+            for module in dpl_grp['applications-sets']:
+                res = nuvla.get(module['id'], select='parent-path')
+                # parent-path starting with 'apps-sets' indicates "virtual" app set
+                if 'apps-sets' == res.data['parent-path']:
+                    dpl_groups_on_virt_app_set.append(dpl_grp)
+
+        return dpl_groups_on_virt_app_set
 
     @staticmethod
     def find_deployment_groups_by_application_set(nuvla: Nuvla, module_id: str,
@@ -244,99 +289,17 @@ class EventSubsCfgMatcher:
         log.warning('Unknown subtype %s on module %s', module_id, module_subtype)
         return []
 
-    @staticmethod
-    def deployment_groups_from_module_apps_sets(nuvla: Nuvla, module_id: str,
-            acl_owners: Set) -> List[dict]:
-        # FIXME: ....
-        """
-        Finds deployment groups from the module of the type applications-sets.
-
-        :param module_id: str
-        :param acl_owners: set of owners
-        :return:
-        """
-        # get all applications-sets by module_id
-        collection_name = 'module-applications-sets'
-        app_flt = 'applications-sets/applications/id'
-
-        flt = f"{app_flt}/id^='{module_id}'"
-        select = 'id'
-        log.debug('%s query: filter=%s; select=%s', collection_name, flt, select)
-        try:
-            res = nuvla.search(collection_name, filter=flt, select=select)
-            log.info('search res: %s', res)
-        except Exception as ex:
-            log.exception('Failed getting %s from Nuvla API server: %s',
-                          collection_name, exc_info=ex)
-            return []
-        module_apps_sets = [r.data['id'] for r in res.resources]
-
-        # get all deployment groups that belong to the user(s) and were started
-        # from the application-sets
-
-        collection_name = 'applications-sets'
-        app_flt = 'applications-sets/applications/id'
-        flt = f"subtype='applications_sets' and {app_flt}/id^='{module_apps_sets}'"
-        select = 'id,name,description,acl'
-        log.debug('%s query: filter=%s; select=%s', collection_name, flt, select)
-        try:
-            res = nuvla.search(collection_name, filter=flt, select=select)
-            log.info('search res: %s', res)
-        except Exception as ex:
-            log.exception('Failed getting deployments from Nuvla API server: %s',
-                          exc_info=ex)
-            return []
-
     # Notification producers.
-
-    def notifs_to_update_apps_bouquets(self, nuvla: Nuvla, module_id: str,
-            subs_cfgs: List[SubscriptionCfg]) -> List[AppPublishedAppsBouquetUpdateNotification]:
-        """
-        Returns individual notifications per applications bouquet.
-
-        :param nuvla:
-        :param module_id:
-        :param subs_cfgs:
-        :return:
-        """
-
-        log_msg = 'module published for apps bouquet'
-        subs_apps_bq_published = \
-            self.filter_event_module_publish_appsbouquet_subscriptions(subs_cfgs)
-        if log.level == logging.DEBUG:
-            log.debug('Active subscriptions on %s %s: %s', log_msg,
-                      self.event_id(), [x.get('id') for x in subs_apps_bq_published])
-        if not subs_apps_bq_published:
-            return []
-
-        notifs: List[AppPublishedAppsBouquetUpdateNotification] = []
-        acl_owners = collection_all_owners(subs_apps_bq_published)
-
-        apps_to_notify = self.find_apps_bouquets_by_application(nuvla, module_id,
-                                                                acl_owners)
-        if not apps_to_notify:
-            log.warning('No apps bouquets found on %s for %s', module_id, acl_owners)
-            return []
-
-        for sc in subs_apps_bq_published:
-            log.debug('Matching subscription on %s on %s', log_msg, sc.get("id"),
-                      self.event_id())
-            # Are there apps bouquets belonging to the owner of this subscription?
-            for app in apps_to_notify:
-                if sc.owner() in app.get('acl', {}).get('owners', []):
-                    notifs.append(
-                        AppPublishedAppsBouquetUpdateNotification(
-                            app.get('path'), sc, self._e))
-        return notifs
 
     def notifs_to_update_simple_deployments_from_app(self, nuvla: Nuvla, module_id: str,
             subs_cfgs: List[SubscriptionCfg]) -> \
             List[AppPublishedDeploymentsUpdateNotification]:
         """
+        A.1
         Returns notifications with the filter for deployments for bulk update.
 
-        :param nuvla:
-        :param module_id:
+        :param nuvla: initialised Nuvla API client
+        :param module_id: str
         :param subs_cfgs:
         :return:
         """
@@ -376,14 +339,94 @@ class EventSubsCfgMatcher:
         return notifs
 
     def notifs_to_update_deployment_group_from_app(self, nuvla: Nuvla, module_id: str,
-            subs_cfgs: List[SubscriptionCfg]) -> List[dict]:
-        # FIXME: Implement.
-        return []
+            subs_cfgs: List[SubscriptionCfg]) -> \
+            List[AppAppBqPublishedDeploymentGroupUpdateNotification]:
+        """
+        A.2
+        Returns individual notifications per deployment group.
+
+        :param nuvla: initialised Nuvla API client
+        :param module_id: str
+        :param subs_cfgs:
+        :return:
+        """
+        log_msg = 'application published for deployment groups'
+        subs_module_published = \
+            self.filter_event_module_publish_deployment_subscriptions(subs_cfgs)
+        if log.level == logging.DEBUG:
+            log.debug('Active subscriptions on %s %s: %s', log_msg,
+                      self.event_id(), [x.get('id') for x in subs_module_published])
+        if not subs_module_published:
+            return []
+
+        notifs: List[AppAppBqPublishedDeploymentGroupUpdateNotification] = []
+        acl_owners = collection_all_owners(subs_module_published)
+
+        dpl_groups_to_notify = self.find_deployment_groups_by_application(
+            nuvla, module_id, acl_owners)
+
+        if not dpl_groups_to_notify:
+            log.warning('No deployment groups found on %s for %s', module_id, acl_owners)
+            return []
+
+        for sc in subs_module_published:
+            log.debug('Matching subscription on %s on %s', log_msg, sc.get("id"),
+                      self.event_id())
+            # Are there apps bouquets belonging to the owner of this subscription?
+            for dpl_grp in dpl_groups_to_notify:
+                if sc.owner() in dpl_grp.get('acl', {}).get('owners', []):
+                    notifs.append(
+                        AppAppBqPublishedDeploymentGroupUpdateNotification(
+                            dpl_grp['id'], sc, self._e))
+        return notifs
+
+    def notifs_to_update_apps_bouquets(self, nuvla: Nuvla, module_id: str,
+                                       subs_cfgs: List[SubscriptionCfg]) -> \
+            List[AppPublishedAppsBouquetUpdateNotification]:
+        """
+        A.3
+        Returns individual notifications per applications bouquet.
+
+        :param nuvla: initialised Nuvla API client
+        :param module_id: str
+        :param subs_cfgs:
+        :return:
+        """
+
+        log_msg = 'module published for apps bouquet'
+        subs_apps_bq_published = \
+            self.filter_event_module_publish_appsbouquet_subscriptions(subs_cfgs)
+        if log.level == logging.DEBUG:
+            log.debug('Active subscriptions on %s %s: %s', log_msg,
+                      self.event_id(), [x.get('id') for x in subs_apps_bq_published])
+        if not subs_apps_bq_published:
+            return []
+
+        notifs: List[AppPublishedAppsBouquetUpdateNotification] = []
+        acl_owners = collection_all_owners(subs_apps_bq_published)
+
+        apps_to_notify = self.find_apps_bouquets_by_application(nuvla, module_id,
+                                                                acl_owners)
+        if not apps_to_notify:
+            log.warning('No apps bouquets found on %s for %s', module_id, acl_owners)
+            return []
+
+        for sc in subs_apps_bq_published:
+            log.debug('Matching subscription on %s on %s', log_msg, sc.get("id"),
+                      self.event_id())
+            # Are there apps bouquets belonging to the owner of this subscription?
+            for app in apps_to_notify:
+                if sc.owner() in app.get('acl', {}).get('owners', []):
+                    notifs.append(
+                        AppPublishedAppsBouquetUpdateNotification(
+                            app.get('path'), sc, self._e))
+        return notifs
 
     def notifs_to_update_deployment_group_from_app_bq(self, nuvla: Nuvla, module_id: str,
             subs_cfgs: List[SubscriptionCfg]) -> \
             List[AppAppBqPublishedDeploymentGroupUpdateNotification]:
         """
+        B.1
         Returns individual notifications per deployment group.
 
         :param nuvla:
@@ -455,17 +498,6 @@ class EventSubsCfgMatcher:
               to be updated. In the deployment group we need to highlight the
               application bouquet that triggered the notification as it might
               need attention.
-
-        A.1 Search:
-        deployment/
-        module/id^='module_id' and acl/owners=['me', 'you'] and deployment-set=null
-
-        A.2 Search:
-        deployment/
-        module/id^='module_id' and acl/owners=['me', 'you'] and deployment-set!=null
-        How to discriminate from the ones that are part of deployment-set via
-        the virtual application bouquet against the ones which are part of a
-        real application bouquet?
 
         :param subs_cfgs: list of subscriptions
         :return: list: notification objects
