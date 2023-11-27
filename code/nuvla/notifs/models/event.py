@@ -23,3 +23,15 @@ class Event(Resource):
 
     def resource_id(self):
         return self['content']['resource']['href']
+
+    def resource_content(self):
+        return self['content']['resource']['content']
+
+    def is_name(self, name: str):
+        return name == self['name']
+
+    def is_successful(self):
+        return True is self['success']
+
+    def is_category(self, category):
+        return category == self['category']

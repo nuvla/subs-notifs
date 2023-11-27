@@ -98,7 +98,7 @@ class SubscriptionCfg(DictDataClass):
     # Optional attributes on criteria.
     #
 
-    def criteria_value(self) -> Union[int, float, bool]:
+    def criteria_value(self) -> Union[int, float, bool, str]:
         """
         'value' is optional attribute in criteria.
         """
@@ -148,14 +148,14 @@ class SubscriptionCfg(DictDataClass):
     def is_network_metric(self):
         return self.criteria_metric().startswith(NETWORK_METRIC_PREFIX)
 
-    def _owner(self):
+    def owner(self):
         owners = self.get('acl', {}).get('owners', [])
         if owners:
             return owners[0]
         return None
 
     def can_view_resource(self, resource_acl: dict) -> bool:
-        subs_owner = self._owner()
+        subs_owner = self.owner()
         return subs_owner in resource_acl.get('owners', []) or \
                subs_owner in resource_acl.get('view-data', [])
 

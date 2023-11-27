@@ -1,6 +1,7 @@
 import json
 from typing import List, Dict, Union
 
+from nuvla.api.resources.deployment import Deployment
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
@@ -130,6 +131,29 @@ class NuvlaEdgeNotificationBuilder:
         return self._n.render()
 
 
+def to_timestamp_utc(ts: str) -> str:
+    """
+    Possible `ts` formats:
+    - 2023-11-14T08:26:52.114Z
+    - 2023-11-14T08:26:52.114
+    - 2023-11-14T08:26:52Z
+    - 2023-11-14T08:26:52
+
+    The translation must remove milliseconds and return string with only single
+    Z at the end. The result must be this:
+    - 2023-11-14T08:26:52Z
+
+    :param ts: str
+    :return: str
+    """
+
+    if '.' in ts:
+        ts = ts.split('.')[0]
+    if ts.endswith('Z'):
+        return ts
+    return ts + 'Z'
+
+
 class BlackboxEventNotification(dict):
 
     def __init__(self, sc: SubscriptionCfg, event: Event):
@@ -145,5 +169,65 @@ class BlackboxEventNotification(dict):
                           'condition': sc['criteria']['condition'],
                           'condition_value': str(sc['criteria'].get('value', '')),
                           'value': 'true',
-                          'timestamp': event.timestamp().split('.')[0] + 'Z',
+                          'timestamp': to_timestamp_utc(event.timestamp()),
+                          'recovery': True})
+
+
+class AppPublishedAppsBouquetUpdateNotification(dict):
+
+    def __init__(self, apps_bq_path: str, sc: SubscriptionCfg, event: Event):
+        url = f"apps/{apps_bq_path}?apps-tab=applications"
+        app = event.resource_content()
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'subs_description': app['name'],
+                          'method_ids': sc['method-ids'],
+                          'resource_name': 'update application bouquet',
+                          'resource_description': 'application bouquet',
+                          'resource_uri': url,
+                          'metric': sc['criteria']['metric'],
+                          'value': 'true',
+                          'timestamp': to_timestamp_utc(event.timestamp()),
+                          'recovery': True})
+
+
+class AppAppBqPublishedDeploymentGroupUpdateNotification(dict):
+
+    def __init__(self, depl_group_id: str, sc: SubscriptionCfg, event: Event):
+        _id = depl_group_id.split('/')[1]
+        url = f'deployment-groups/{_id}?deployment-groups-detail-tab=apps'
+        app = event.resource_content()
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'subs_description': app['name'],
+                          'method_ids': sc['method-ids'],
+                          'resource_name': 'update deployment group',
+                          'resource_description': 'deployment group',
+                          'resource_uri': url,
+                          'metric': sc['criteria']['metric'],
+                          'value': 'true',
+                          'timestamp': to_timestamp_utc(event.timestamp()),
+                          'recovery': True})
+
+
+class AppPublishedDeploymentsUpdateNotification(dict):
+
+    def __init__(self, sc: SubscriptionCfg, event: Event):
+        module_id = event.resource_id().split('_')[0]
+        dpls_update_url = f"deployments?select=all&view=table&deployment=module/id='{module_id}' " \
+                          f"and deployment-set=null"
+        app = event.resource_content()
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'subs_description': app['name'],
+                          'method_ids': sc['method-ids'],
+                          'resource_name': 'update deployments',
+                          'resource_description': 'deployment',
+                          'resource_uri': dpls_update_url,
+                          'metric': sc['criteria']['metric'],
+                          'value': 'true',
+                          'timestamp': to_timestamp_utc(event.timestamp()),
                           'recovery': True})

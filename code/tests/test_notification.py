@@ -1,9 +1,10 @@
 import unittest
 
-from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher
+from nuvla.notifs.matching.ne_telem import NuvlaEdgeSubsCfgMatcher
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
-    NuvlaEdgeNotification
+    NuvlaEdgeNotification, to_timestamp_utc, \
+    AppPublishedDeploymentsUpdateNotification
 from nuvla.notifs.models.subscription import SubscriptionCfg
 from nuvla.notifs.db.driver import gb_to_bytes
 
@@ -59,6 +60,15 @@ class TestNuvlaEdgeNotificationBuilder(unittest.TestCase):
         curr_val_bytes = gb_to_bytes(cond_val_gb) + 1  # 1 byte above condition
         assert '108 bytes' == NuvlaEdgeNotificationBuilder.convert_bytes(
             curr_val_bytes, cond_val_gb)
+
+    def test_to_timestamp_utc(self):
+        ts_base = '2023-11-14T08:26:52'
+        timestamps = [ts_base + '.114Z',
+                      ts_base + '.114',
+                      ts_base + 'Z',
+                      ts_base]
+        for ts in timestamps:
+            assert ts_base + 'Z' == to_timestamp_utc(ts)
 
     def test_builder_numeric_network(self):
         cond_value = '5.1'

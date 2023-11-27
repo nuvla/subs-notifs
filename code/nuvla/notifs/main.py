@@ -19,8 +19,9 @@ from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
     RESOURCE_KIND_DATARECORD, RESOURCE_KIND_EVENT
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
-from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher, \
-    TaggedResourceNetworkSubsCfgMatcher, EventSubsCfgMatcher
+from nuvla.notifs.matching.base import TaggedResourceNetworkSubsCfgMatcher
+from nuvla.notifs.matching.ne_telem import NuvlaEdgeSubsCfgMatcher
+from nuvla.notifs.matching.event import EventSubsCfgMatcher
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.event import Event
 
@@ -129,9 +130,14 @@ def events_process(event: dict, subs_cfgs: List[SubscriptionCfg],
                    notif_publisher: NotificationPublisher):
     log.info('Got event: %s', event)
 
-    e = Event(event)
-
-    notifs = EventSubsCfgMatcher(e).match_blackbox(subs_cfgs)
+    matcher = EventSubsCfgMatcher(Event(event))
+    if matcher.is_event_blackbox_created():
+        notifs = matcher.match_blackbox(subs_cfgs)
+    elif matcher.is_event_module_published():
+        notifs = matcher.match_module_published(subs_cfgs)
+    else:
+        log.warning('Unknown event type for processing: %s', event)
+        return
     log.info('To notify: %s', notifs)
     notif_publisher.publish_list(notifs, NOTIF_TOPIC)
 

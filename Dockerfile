@@ -25,6 +25,9 @@ WORKDIR /opt/nuvla/
 
 RUN pip install -r requirements.txt
 
+RUN mv /opt/nuvla/nuvla/notifs /usr/local/lib/python3.8/site-packages/nuvla/
+RUN rm -rf /opt/nuvla/nuvla
+
 VOLUME /srv/nuvla/shared
 ENV PYTHONPATH=/opt/nuvla/
 ENTRYPOINT ["./subs-notifs.py"]
