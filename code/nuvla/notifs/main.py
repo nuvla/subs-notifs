@@ -16,7 +16,8 @@ from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
     SubscriptionCfg, SUBS_CONF_TOPIC, RESOURCE_KIND_NE, \
-    RESOURCE_KIND_DATARECORD, RESOURCE_KIND_EVENT
+    RESOURCE_KIND_DATARECORD, RESOURCE_KIND_EVENT, RESOURCE_KIND_DEPLOYMENT, \
+    RESOURCE_KIND_APPLICATION_BOUQUET
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
 from nuvla.notifs.matching.base import TaggedResourceNetworkSubsCfgMatcher
@@ -156,9 +157,13 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                               auto_offset_reset='latest'):
         try:
             msg.value['id'] = msg.key
-            events_process(msg.value,
-                           list(subs_cfgs.get(RESOURCE_KIND_EVENT, {}).values()),
-                           notif_publisher)
+            subs_cfgs_events = []
+            for rk in [RESOURCE_KIND_EVENT,
+                       RESOURCE_KIND_DEPLOYMENT,
+                       RESOURCE_KIND_APPLICATION_BOUQUET]:
+                subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
+
+            events_process(msg.value, subs_cfgs_events, notif_publisher)
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error('Failed processing %s with: %s', msg.key, ex)

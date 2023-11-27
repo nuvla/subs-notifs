@@ -19,6 +19,7 @@ RESOURCE_KIND_EVENT = 'event'
 RESOURCE_KIND_DATARECORD = 'data-record'
 RESOURCE_KIND_DEPLOYMENT = 'deployment'
 RESOURCE_KIND_DEPLOYMENT_SET = 'deployment-set'
+RESOURCE_KIND_APPLICATION_BOUQUET = 'apps-bouquet'
 RESOURCE_KINDS = [v for k, v in globals().items() if
                   k.startswith('RESOURCE_KIND_')]
 
