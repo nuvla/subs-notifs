@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [0.0.13] - 2023-12-11
+
+### Add
+
+- Added Notifications to App Bouquet, Deployments, and Deployment Groups on 
+  publication of App or App Bouquet.
+
 ### Changed
 
 ## [0.0.12] - 2023-06-26
