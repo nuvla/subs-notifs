@@ -8,7 +8,7 @@ import uuid
 from typing import Union
 
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.updater import DictUpdater
+from nuvla.notifs.dictupdater import DictUpdater
 
 from kafka import KafkaConsumer
 from kafka import KafkaProducer

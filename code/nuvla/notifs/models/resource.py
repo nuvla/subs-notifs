@@ -3,6 +3,11 @@ Generic class to hold Nuvla resource as dict. Contains helper methods to access
 resource attributes.
 """
 
+from typing import List, Set, Union
+from itertools import chain
+
+from .subscription import SubscriptionCfg
+
 
 class Resource(dict):
     """
@@ -45,3 +50,8 @@ class Resource(dict):
 
     def uuid(self):
         return self['id'].split('/')[1]
+
+
+def collection_all_owners(coll: Union[List[Resource], List[SubscriptionCfg]]) -> Set[str]:
+    """Given a list of resources, returns a set of all owners."""
+    return set(chain.from_iterable([x['acl']['owners'] for x in coll]))

@@ -20,12 +20,22 @@ jobs:
         with:
           python-version: '3.8'
 
+      - name: Install pytest
+        run: |
+          python3 -m pip install --upgrade pytest
+
+      - name: Install test requirements
+        run: |
+          python3 -m pip install --upgrade -r code/requirements.tests.txt
+
+      - name: Make internal packages part of nuvla-api distribution
+        run: |
+          export SITE_PACKAGES=$(dirname $(python3 -c 'import os; print(os.__file__)'))/site-packages
+          ln -sf $(pwd)/code/nuvla/notifs $SITE_PACKAGES/nuvla/
+
       - name: Run unit tests
         working-directory: code
-        env:
-          PYTHONPATH: .
         run: |
-          pip install -r requirements.tests.txt
           pytest tests/ --junitxml=test-report.xml -v
 
       - name: Multi-arch docker image build prerequired

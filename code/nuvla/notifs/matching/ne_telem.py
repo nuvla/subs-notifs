@@ -1,107 +1,16 @@
-"""
-This module provides implementations for matching criteria defined in
-user notification subscriptions against the metrics coming from different
-components of Nuvla the user has access to.
-"""
-
 import traceback
-from typing import Dict, Union, List
+from typing import Union, Dict, List
 
-from nuvla.notifs.db import RxTxDB, gb_to_bytes, bytes_to_gb
+from nuvla.notifs.db.driver import RxTxDB
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound
-from nuvla.notifs.event import Event
-from nuvla.notifs.resource import Resource
-from nuvla.notifs.notification import NuvlaEdgeNotificationBuilder, \
-    NuvlaEdgeNotification, BlackboxEventNotification
-from nuvla.notifs.subscription import SubscriptionCfg, NETWORK_METRIC_PREFIX
+from nuvla.notifs.matching.base import gt, lt, TaggedResourceSubsCfgMatcher
+from nuvla.notifs.models.metric import MetricNotFound, NuvlaEdgeMetrics
+from nuvla.notifs.models.subscription import SubscriptionCfg, \
+    NETWORK_METRIC_PREFIX
+from nuvla.notifs.notification import NuvlaEdgeNotification, \
+    NuvlaEdgeNotificationBuilder
 
-log = get_logger('matcher')
-
-
-def gt(val_bytes: Union[int, float], sc: SubscriptionCfg) -> bool:
-    """greater than"""
-    return val_bytes > gb_to_bytes(sc.criteria_value())
-
-
-def lt(val_bytes: Union[int, float], sc: SubscriptionCfg) -> bool:
-    """less than"""
-    return val_bytes < gb_to_bytes(sc.criteria_value())
-
-
-class ResourceSubsCfgMatcher:
-    """
-    Helper methods to check if subscription configurations are subscribed to
-    a resource.
-    """
-
-    @classmethod
-    def resource_subscribed(cls, resource: Resource,
-                            subs_cfg: SubscriptionCfg,
-                            with_disabled=False) -> bool:
-        if with_disabled:
-            return subs_cfg.can_view_resource(
-                resource.get('acl', resource.get('ACL', {})))
-        return subs_cfg.is_enabled() and \
-               subs_cfg.can_view_resource(
-                   resource.get('acl', resource.get('ACL', {})))
-
-    @classmethod
-    def resource_subscriptions(cls, resource: Resource,
-                               subs_cfgs: List[SubscriptionCfg]) -> \
-            List[SubscriptionCfg]:
-        subs_cfgs_subscribed = []
-        for subs_cfg in subs_cfgs:
-            if cls.resource_subscribed(resource, subs_cfg):
-                subs_cfgs_subscribed.append(subs_cfg)
-        return subs_cfgs_subscribed
-
-    @classmethod
-    def resource_subscriptions_ids(cls, resource: Resource,
-                                   subs_cfgs: List[SubscriptionCfg]) \
-            -> List[str]:
-        return [sc['id'] for sc in
-                cls.resource_subscriptions(resource, subs_cfgs)]
-
-
-class TaggedResourceSubsCfgMatcher(ResourceSubsCfgMatcher):
-    """
-    Helper methods to check if subscription configurations are subscribed to
-    a tagged resource.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    @classmethod
-    def resource_subscribed(cls, resource: Resource,
-                            subs_cfg: SubscriptionCfg,
-                            with_disabled=False) -> bool:
-        if super().resource_subscribed(resource, subs_cfg, with_disabled):
-            if subs_cfg.is_tags_set():
-                return subs_cfg.tags_match(
-                    resource.get('tags', resource.get('TAGS', [])))
-            return True
-        return False
-
-
-class TaggedResourceNetworkSubsCfgMatcher(TaggedResourceSubsCfgMatcher):
-    """
-    Helper methods to check if subscription configurations are subscribed to
-    networking metrics on a tagged resource.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    @classmethod
-    def resource_subscribed(cls, resource: Resource,
-                            subs_cfg: SubscriptionCfg,
-                            with_disabled=True) -> bool:
-        return super().resource_subscribed(resource, subs_cfg,
-                                           with_disabled) and \
-               subs_cfg.is_network_metric()
-
+log = get_logger('matcher-ne_telelem')
 
 def metric_not_found_ex_handler(func):
     def wrapper(*args, **kwargs):
@@ -430,38 +339,5 @@ class NuvlaEdgeSubsCfgMatcher:
                         log.error('Failed building notification for %s: %s',
                                   m_name, ex)
                         traceback.print_exc()
-
-        return res
-
-
-class EventSubsCfgMatcher:
-
-    def __init__(self, event: Event):
-        self._e = event
-        self._trscm = TaggedResourceSubsCfgMatcher()
-
-    def event_id(self):
-        return self._e['id']
-
-    def resource_subscriptions(self, subs_cfgs: List[SubscriptionCfg]) -> \
-            List[SubscriptionCfg]:
-        return list(self._trscm.resource_subscriptions(self._e, subs_cfgs))
-
-    def notif_build_blackbox(self,
-                             sc: SubscriptionCfg) -> BlackboxEventNotification:
-        return BlackboxEventNotification(sc, self._e)
-
-    def match_blackbox(self, subs_cfgs: List[SubscriptionCfg]) -> List[
-            BlackboxEventNotification]:
-        res: List[BlackboxEventNotification] = []
-        subs_on_resource = self.resource_subscriptions(subs_cfgs)
-        log.debug('Active subscriptions on %s: %s',
-                  self.event_id(), [x.get('id') for x in subs_on_resource])
-        for sc in subs_on_resource:
-            log.debug('Matching subscription %s on %s', sc.get("id"),
-                      self.event_id())
-            if self._e.content_match_href('^data-record/.*') and \
-                    self._e.content_is_state('created'):
-                res.append(self.notif_build_blackbox(sc))
 
         return res

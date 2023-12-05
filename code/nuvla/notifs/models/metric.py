@@ -10,7 +10,7 @@ This module contains
 
 from typing import Union, Callable, Any, List
 
-from nuvla.notifs.resource import Resource
+from nuvla.notifs.models.resource import Resource
 from nuvla.notifs.log import get_logger
 
 log = get_logger('metric')

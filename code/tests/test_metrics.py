@@ -1,6 +1,6 @@
 import unittest
 
-from nuvla.notifs.metric import NuvlaEdgeMetrics, MetricNotFound, \
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics, MetricNotFound, \
     EX_MSG_TMPL_KEY_NOT_FOUND, NENetMetric
 
 

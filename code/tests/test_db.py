@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 
-from mock import Mock
 import unittest
+from mock import Mock
 
 import elasticsearch
 
-from nuvla.notifs.metric import NENetMetric
-from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.models.metric import NENetMetric
+from nuvla.notifs.models.subscription import SubscriptionCfg
 
 from es_patch import es_update
 import elasticmock.fake_elasticsearch
@@ -23,12 +23,12 @@ elasticmock.fake_indices.FakeIndicesClient.put_mapping = es_index_put_mapping
 from es_patch import get_elasticmock
 elasticmock = get_elasticmock()
 
-import nuvla.notifs.window as window
+import nuvla.notifs.db.window as window
 window_now_orig = datetime.now
 
-from nuvla.notifs.db import RxTxDriverES, gb_to_bytes, bytes_to_gb,\
+from nuvla.notifs.db.driver import RxTxDriverES, gb_to_bytes, bytes_to_gb,\
     DBInconsistentStateError
-from nuvla.notifs.schema.rxtx import RxTx, RxTxEntry
+from nuvla.notifs.db.schema.rxtx import RxTx, RxTxEntry
 
 
 class TestDBUtils(unittest.TestCase):

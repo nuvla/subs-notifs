@@ -1,6 +1,6 @@
-from typing import Dict
+from typing import Dict, List, Tuple
 
-from nuvla.notifs.updater import DictUpdater
+from nuvla.notifs.dictupdater import DictUpdater
 
 
 class FakeUpdaterEmpty(DictUpdater):
@@ -10,7 +10,7 @@ class FakeUpdaterEmpty(DictUpdater):
 
 class FakeUpdater(DictUpdater):
 
-    def __init__(self, data):
+    def __init__(self, data: List[Tuple[str, dict]]):
         self.data = data
 
     def do_yield(self) -> Dict[str, dict]:

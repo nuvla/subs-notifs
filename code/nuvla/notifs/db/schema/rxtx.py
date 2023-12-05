@@ -6,9 +6,9 @@ the DB.
 from typing import Union
 
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.metric import NENetMetric
-from nuvla.notifs.window import Window
-from nuvla.notifs.subscription import SubscriptionCfg
+from nuvla.notifs.models.metric import NENetMetric
+from nuvla.notifs.db.window import Window
+from nuvla.notifs.models.subscription import SubscriptionCfg
 
 log = get_logger('rxtx')
 

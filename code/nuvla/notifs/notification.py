@@ -1,11 +1,12 @@
 import json
 from typing import List, Dict, Union
 
-from nuvla.notifs.event import Event
+from nuvla.api.resources.deployment import Deployment
+from nuvla.notifs.models.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SubscriptionCfg
-from nuvla.notifs.resource import Resource
+from nuvla.notifs.models.subscription import SubscriptionCfg
+from nuvla.notifs.models.resource import Resource
 
 log = get_logger('notification')
 
@@ -130,6 +131,29 @@ class NuvlaEdgeNotificationBuilder:
         return self._n.render()
 
 
+def to_timestamp_utc(ts: str) -> str:
+    """
+    Possible `ts` formats:
+    - 2023-11-14T08:26:52.114Z
+    - 2023-11-14T08:26:52.114
+    - 2023-11-14T08:26:52Z
+    - 2023-11-14T08:26:52
+
+    The translation must remove milliseconds and return string with only single
+    Z at the end. The result must be this:
+    - 2023-11-14T08:26:52Z
+
+    :param ts: str
+    :return: str
+    """
+
+    if '.' in ts:
+        ts = ts.split('.')[0]
+    if ts.endswith('Z'):
+        return ts
+    return ts + 'Z'
+
+
 class BlackboxEventNotification(dict):
 
     def __init__(self, sc: SubscriptionCfg, event: Event):
@@ -145,5 +169,85 @@ class BlackboxEventNotification(dict):
                           'condition': sc['criteria']['condition'],
                           'condition_value': str(sc['criteria'].get('value', '')),
                           'value': 'true',
-                          'timestamp': event.timestamp().split('.')[0] + 'Z',
+                          'timestamp': to_timestamp_utc(event.timestamp()),
+                          'recovery': True})
+
+
+class AppPublishedAppsBouquetUpdateNotification(dict):
+
+    def __init__(self, affected_app_bq: dict, sc: SubscriptionCfg, event: Event):
+        trigger_rsc = event.resource_content()
+
+        app_bq_name = affected_app_bq.get('name', affected_app_bq['path'])
+        affected_rsc_name = f'Update App Bouquet: {app_bq_name}'
+        affected_rsc_description = affected_rsc_name
+        affected_rsc_uri = f"apps/{affected_app_bq['path']}?apps-tab=applications"
+
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'subs_description': sc['name'],
+                          'method_ids': sc['method-ids'],
+                          'template': 'app-pub',
+                          'trigger_resource_path': 'apps/' + trigger_rsc.get('path', ''),
+                          'trigger_resource_name': trigger_rsc['name'],
+                          'resource_name': affected_rsc_name,
+                          'resource_description': affected_rsc_description,
+                          'resource_uri': affected_rsc_uri,
+                          'timestamp': to_timestamp_utc(event.timestamp()),
+                          'recovery': True})
+
+
+
+class AppAppBqPublishedDeploymentGroupUpdateNotification(dict):
+
+    def __init__(self, depl_group: dict, sc: SubscriptionCfg, event: Event):
+        trigger_rsc = event.resource_content()
+
+        depl_group_id = depl_group['id'].split('/')[-1]
+        dpl_grp_name = depl_group.get('name')
+
+        affected_rsc_name = f'Update Deployment Group: {dpl_grp_name or depl_group_id}'
+        affected_rsc_description = affected_rsc_name
+        affected_rsc_uri = f'deployment-groups/{depl_group_id}?deployment-groups-detail-tab=apps'
+
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'subs_description': sc['name'],
+                          'method_ids': sc['method-ids'],
+                          'template': 'app-pub',
+                          'trigger_resource_path': 'apps/' + trigger_rsc.get('path', ''),
+                          'trigger_resource_name': trigger_rsc['name'],
+                          'resource_name': affected_rsc_name,
+                          'resource_description': affected_rsc_description,
+                          'resource_uri': affected_rsc_uri,
+                          'timestamp': to_timestamp_utc(event.timestamp()),
+                          'recovery': True})
+
+
+class AppPublishedDeploymentsUpdateNotification(dict):
+
+    def __init__(self, sc: SubscriptionCfg, event: Event):
+        module_id = event.resource_id().split('_')[0]
+
+        trigger_rsc = event.resource_content()
+
+        affected_rsc_name = 'Update Deployments'
+        affected_rsc_description = affected_rsc_name
+        affected_rsc_uri = f"deployments?select=all&view=table&deployment=module/id='{module_id}' " \
+                                f"and deployment-set=null"
+
+        super().__init__({'id': sc['id'],
+                          'subs_id': sc['id'],
+                          'subs_name': sc['name'],
+                          'subs_description': sc['name'],
+                          'method_ids': sc['method-ids'],
+                          'template': 'app-pub',
+                          'trigger_resource_path': 'apps/' + trigger_rsc.get('path', ''),
+                          'trigger_resource_name': trigger_rsc['name'],
+                          'resource_name': affected_rsc_name,
+                          'resource_description': affected_rsc_description,
+                          'resource_uri': affected_rsc_uri,
+                          'timestamp': to_timestamp_utc(event.timestamp()),
                           'recovery': True})

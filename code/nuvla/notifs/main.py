@@ -12,17 +12,18 @@ import threading
 import traceback
 from typing import List
 
-from nuvla.notifs.db import RxTxDB, RxTxDriverES
+from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
-from nuvla.notifs.subscription import SelfUpdatingSubsCfgs, \
+from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
     SubscriptionCfg, SUBS_CONF_TOPIC, RESOURCE_KIND_NE, \
-    RESOURCE_KIND_DATARECORD, RESOURCE_KIND_EVENT
+    RESOURCE_KIND_EVENT, RESOURCE_KIND_APPLICATION
 from nuvla.notifs.kafka_driver import KafkaUpdater, kafka_consumer
 from nuvla.notifs.notification import NotificationPublisher
-from nuvla.notifs.matcher import NuvlaEdgeSubsCfgMatcher, \
-    TaggedResourceNetworkSubsCfgMatcher, EventSubsCfgMatcher
-from nuvla.notifs.metric import NuvlaEdgeMetrics
-from nuvla.notifs.event import Event
+from nuvla.notifs.matching.base import TaggedResourceNetworkSubsCfgMatcher
+from nuvla.notifs.matching.ne_telem import NuvlaEdgeSubsCfgMatcher
+from nuvla.notifs.matching.event import EventSubsCfgMatcher
+from nuvla.notifs.models.metric import NuvlaEdgeMetrics
+from nuvla.notifs.models.event import Event
 
 log = get_logger('main')
 
@@ -69,7 +70,7 @@ def populate_ne_net_db(net_db: RxTxDB, ne_metrics: NuvlaEdgeMetrics,
     net_db.update(ne_metrics, subs_cfgs_matched)
 
 
-def ne_telem_process(metrics: dict, subs_cfgs: List[SubscriptionCfg],
+def process_ne_telem(metrics: dict, subs_cfgs: List[SubscriptionCfg],
                      net_db: RxTxDB, notif_publisher: NotificationPublisher):
     log.info('Got NE metrics: %s', metrics)
 
@@ -82,17 +83,18 @@ def ne_telem_process(metrics: dict, subs_cfgs: List[SubscriptionCfg],
     notif_publisher.publish_list(notifs, NOTIF_TOPIC)
 
 
-def wait_sc_populated(subs_cfgs: SelfUpdatingSubsCfgs, resource_kind: str,
+def wait_sc_populated(subs_cfgs: SelfUpdatingSubsCfgs, resource_kinds: List[str],
                       sleep=5, timeout=None):
     ts_end = time.time() + timeout if timeout else None
-    while not subs_cfgs.get(resource_kind):
+    while not all(subs_cfgs.get(x) for x in resource_kinds):
         if ts_end and time.time() >= ts_end:
-            log.warning('Stopped waiting %s after %s sec', resource_kind,
+            log.warning('Stopped waiting %s after %s sec', resource_kinds,
                         timeout)
-            return
-        log.debug('waiting for %s in subscription config: %s', resource_kind,
+            return False
+        log.debug('waiting for %s in subscription config: %s', resource_kinds,
                   list(subs_cfgs.keys()))
         time.sleep(sleep)
+    return True
 
 
 def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
@@ -100,7 +102,7 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
     db_driver.connect()
     net_db = RxTxDB(db_driver)
 
-    wait_sc_populated(subs_cfgs, RESOURCE_KIND_NE, timeout=60)
+    wait_sc_populated(subs_cfgs, [RESOURCE_KIND_NE], timeout=60)
 
     notif_publisher = NotificationPublisher()
 
@@ -112,7 +114,7 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
                               auto_offset_reset='latest'):
         try:
             msg.value['id'] = msg.key
-            ne_telem_process(msg.value,
+            process_ne_telem(msg.value,
                              list(subs_cfgs.get(RESOURCE_KIND_NE, {}).values()),
                              net_db, notif_publisher)
         except Exception as ex:
@@ -120,25 +122,26 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
             log.error('Failed processing %s with: %s', msg.key, ex)
 
 
-def subs_notif_data_record(subs_cfgs: SelfUpdatingSubsCfgs):
-    wait_sc_populated(subs_cfgs, RESOURCE_KIND_DATARECORD, timeout=60)
-    log.info(f'Starting {RESOURCE_KIND_DATARECORD} processing...')
-
-
-def events_process(event: dict, subs_cfgs: List[SubscriptionCfg],
-                   notif_publisher: NotificationPublisher):
+def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
+                  notif_publisher: NotificationPublisher):
     log.info('Got event: %s', event)
 
-    e = Event(event)
-
-    notifs = EventSubsCfgMatcher(e).match_blackbox(subs_cfgs)
+    matcher = EventSubsCfgMatcher(Event(event))
+    if matcher.is_event_blackbox_created():
+        notifs = matcher.match_blackbox(subs_cfgs)
+    elif matcher.is_event_module_published():
+        notifs = matcher.match_module_published(subs_cfgs)
+    else:
+        log.warning('Unknown event type for processing: %s', event)
+        return
     log.info('To notify: %s', notifs)
     notif_publisher.publish_list(notifs, NOTIF_TOPIC)
 
 
 def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
-    wait_sc_populated(subs_cfgs, RESOURCE_KIND_EVENT, timeout=60)
-    log.info(f'Starting {RESOURCE_KIND_EVENT} processing...')
+    resource_kinds = [RESOURCE_KIND_EVENT, RESOURCE_KIND_APPLICATION]
+
+    wait_sc_populated(subs_cfgs, resource_kinds, timeout=60)
 
     notif_publisher = NotificationPublisher()
 
@@ -150,9 +153,11 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                               auto_offset_reset='latest'):
         try:
             msg.value['id'] = msg.key
-            events_process(msg.value,
-                           list(subs_cfgs.get(RESOURCE_KIND_EVENT, {}).values()),
-                           notif_publisher)
+            subs_cfgs_events = []
+            for rk in resource_kinds:
+                subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
+
+            process_event(msg.value, subs_cfgs_events, notif_publisher)
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error('Failed processing %s with: %s', msg.key, ex)
@@ -175,14 +180,11 @@ def main():
 
     t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry,
                           args=(dyn_subs_cfgs,), daemon=True)
-    t2 = threading.Thread(target=subs_notif_data_record, args=(dyn_subs_cfgs,),
+    t2 = threading.Thread(target=subs_notif_event, args=(dyn_subs_cfgs,),
                           daemon=True)
-    t3 = threading.Thread(target=subs_notif_event, args=(dyn_subs_cfgs,),
-                          daemon=True)
-    t4 = threading.Thread(target=local_time, daemon=True)
+    t3 = threading.Thread(target=local_time, daemon=True)
     t1.start()
     t2.start()
     t3.start()
-    t4.start()
     while True:
         time.sleep(5)
