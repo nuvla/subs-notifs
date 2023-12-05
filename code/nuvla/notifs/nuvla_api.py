@@ -4,7 +4,11 @@ import sys
 
 from nuvla.api import Api
 
-NUVLA_API_ENDPOINT = os.environ.get('NUVLA_API_ENDPOINT', 'http://api:8200')
+NUVLA_PROTO = 'http'
+NUVLA_ENDPOINT = 'api:8200'
+
+
+NUVLA_API_ENDPOINT = os.environ.get('NUVLA_API_ENDPOINT', f'{NUVLA_PROTO}://{NUVLA_ENDPOINT}')
 NUVLA_API_AUTHN_HEADER = os.environ.get('NUVLA_API_AUTHN_HEADER', 'group/nuvla-admin')
 NUVLA_API_INSECURE = os.environ.get('NUVLA_API_INSECURE') in ['True', 'true']
 
