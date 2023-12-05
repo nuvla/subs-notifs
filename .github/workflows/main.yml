@@ -26,7 +26,7 @@ jobs:
 
       - name: Install test requirements
         run: |
-          python3 -m pip install --upgrade -r code/requirements.test.txt
+          python3 -m pip install --upgrade -r code/requirements.tests.txt
 
       - name: Make internal packages part of nuvla-api distribution
         run: |
