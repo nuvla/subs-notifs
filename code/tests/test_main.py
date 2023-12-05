@@ -9,10 +9,11 @@ from es_patch import get_elasticmock
 elasticmock = get_elasticmock()
 
 from fake_updater import get_updater
-from nuvla.notifs.main import es_hosts, ES_HOSTS, populate_ne_net_db
+from nuvla.notifs.main import es_hosts, ES_HOSTS, populate_ne_net_db, \
+    wait_sc_populated
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.subscription import SubscriptionCfg, \
-    RESOURCE_KIND_NE
+    RESOURCE_KIND_NE, RESOURCE_KIND_APPLICATION, SelfUpdatingSubsCfgs
 from nuvla.notifs.models.dyndict import SelfUpdatingDict
 from nuvla.notifs.db.driver import RxTxDB
 
@@ -80,3 +81,27 @@ class TestPopulateNetDB(unittest.TestCase):
         sud.wait_not_empty()
         populate_ne_net_db(net_db, nerm, sud[RESOURCE_KIND_NE].values())
         assert 8 == len(net_db)
+
+    def test_wait_populated(self):
+        assert False is wait_sc_populated(
+            SelfUpdatingSubsCfgs('foo', get_updater()), ['foo', 'bar', 'baz'],
+            sleep=.1, timeout=.1)
+
+        subs_cfgs_data = [('1-2-3-4', {'resource-kind': RESOURCE_KIND_NE,
+                                       'criteria': {'metric': 'network-rx'},
+                                       'id': '1-2-3-4',
+                                       'resource-filter': "tags='nuvlabox=True'",
+                                       'acl': {'owners': ['me']}}),
+                          ('a-b-c-d', {'resource-kind': RESOURCE_KIND_NE,
+                                       'criteria': {'metric': 'network-tx'},
+                                       'id': 'a-b-c-d',
+                                       'resource-filter': "tags='nuvlabox=True'",
+                                       'acl': {'owners': ['me']}}),
+                          ('A-B-C-D', {'resource-kind': RESOURCE_KIND_APPLICATION,
+                                       'criteria': {'metric': 'app-metric'},
+                                       'id': 'A-B-C-D',
+                                       'acl': {'owners': ['me']}})]
+        sud = SelfUpdatingDict('test', get_updater(subs_cfgs_data),
+                               SubscriptionCfg)
+        assert True is wait_sc_populated(sud,
+            [RESOURCE_KIND_APPLICATION, RESOURCE_KIND_NE], sleep=.1, timeout=.1)

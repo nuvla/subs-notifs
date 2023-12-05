@@ -2,7 +2,8 @@ import unittest
 
 from nuvla.notifs.matching.event import EventSubsCfgMatcher
 from nuvla.notifs.models.event import Event
-from nuvla.notifs.models.subscription import SubscriptionCfg
+from nuvla.notifs.models.subscription import SubscriptionCfg, \
+    RESOURCE_KIND_APPLICATION_BOUQUET, RESOURCE_KIND_DEPLOYMENT
 
 
 class TestBlackboxSubsCfgMatcher(unittest.TestCase):
@@ -205,7 +206,7 @@ class TestModulePublished(unittest.TestCase):
         subs_cfg_disabled_appsbq = SubscriptionCfg(
             {
                 'enabled': False,
-                'resource-kind': EventSubsCfgMatcher.RESOURCE_KIND_APPSBOUQUET,
+                'resource-kind': RESOURCE_KIND_APPLICATION_BOUQUET,
                 'criteria': {
                     'metric': 'name',
                     'kind': 'string',
@@ -221,7 +222,7 @@ class TestModulePublished(unittest.TestCase):
         subs_cfg_disabled_depl = SubscriptionCfg(
             {
                 'enabled': False,
-                'resource-kind': EventSubsCfgMatcher.RESOURCE_KIND_DEPLOYMENT,
+                'resource-kind': RESOURCE_KIND_DEPLOYMENT,
                 'criteria': {
                     'metric': 'name',
                     'kind': 'string',
@@ -244,7 +245,7 @@ class TestModulePublished(unittest.TestCase):
         subs_cfg_not_published_depl = SubscriptionCfg(
             {
                 'enabled': True,
-                'resource-kind': EventSubsCfgMatcher.RESOURCE_KIND_DEPLOYMENT,
+                'resource-kind': RESOURCE_KIND_DEPLOYMENT,
                 'criteria': {
                     'metric': 'name',
                     'kind': 'string',
@@ -260,7 +261,7 @@ class TestModulePublished(unittest.TestCase):
         subs_cfg_not_published_appsbq = SubscriptionCfg(
             {
                 'enabled': True,
-                'resource-kind': EventSubsCfgMatcher.RESOURCE_KIND_APPSBOUQUET,
+                'resource-kind': RESOURCE_KIND_APPLICATION_BOUQUET,
                 'criteria': {
                     'metric': 'name',
                     'kind': 'string',
@@ -282,12 +283,12 @@ class TestModulePublished(unittest.TestCase):
         subs_cfg_appsbq = SubscriptionCfg(
             {
                 'enabled': True,
-                'resource-kind': EventSubsCfgMatcher.RESOURCE_KIND_APPSBOUQUET,
+                'resource-kind': 'application',
                 'criteria': {
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA
+                    'value': f'{EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_APPLICATION_BOUQUET}'
                 }
             }
         )
@@ -298,12 +299,12 @@ class TestModulePublished(unittest.TestCase):
         subs_cfg_depl = SubscriptionCfg(
             {
                 'enabled': True,
-                'resource-kind': EventSubsCfgMatcher.RESOURCE_KIND_DEPLOYMENT,
+                'resource-kind': 'application',
                 'criteria': {
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA
+                    'value': f'{EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_DEPLOYMENT}'
                 }
             }
         )

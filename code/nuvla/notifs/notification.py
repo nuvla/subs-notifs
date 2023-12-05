@@ -175,39 +175,53 @@ class BlackboxEventNotification(dict):
 
 class AppPublishedAppsBouquetUpdateNotification(dict):
 
-    def __init__(self, apps_bq_path: str, sc: SubscriptionCfg, event: Event):
-        url = f"apps/{apps_bq_path}?apps-tab=applications"
-        app = event.resource_content()
+    def __init__(self, affected_app_bq: dict, sc: SubscriptionCfg, event: Event):
+        trigger_rsc = event.resource_content()
+
+        app_bq_name = affected_app_bq.get('name', affected_app_bq['path'])
+        affected_rsc_name = f'Update App Bouquet: {app_bq_name}'
+        affected_rsc_description = affected_rsc_name
+        affected_rsc_uri = f"apps/{affected_app_bq['path']}?apps-tab=applications"
+
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
-                          'subs_description': app['name'],
+                          'subs_description': sc['name'],
                           'method_ids': sc['method-ids'],
-                          'resource_name': 'update application bouquet',
-                          'resource_description': 'application bouquet',
-                          'resource_uri': url,
-                          'metric': sc['criteria']['metric'],
-                          'value': 'true',
+                          'template': 'app-pub',
+                          'trigger_resource_path': 'apps/' + trigger_rsc.get('path', ''),
+                          'trigger_resource_name': trigger_rsc['name'],
+                          'resource_name': affected_rsc_name,
+                          'resource_description': affected_rsc_description,
+                          'resource_uri': affected_rsc_uri,
                           'timestamp': to_timestamp_utc(event.timestamp()),
                           'recovery': True})
 
 
+
 class AppAppBqPublishedDeploymentGroupUpdateNotification(dict):
 
-    def __init__(self, depl_group_id: str, sc: SubscriptionCfg, event: Event):
-        _id = depl_group_id.split('/')[-1]
-        url = f'deployment-groups/{_id}?deployment-groups-detail-tab=apps'
-        app = event.resource_content()
+    def __init__(self, depl_group: dict, sc: SubscriptionCfg, event: Event):
+        trigger_rsc = event.resource_content()
+
+        depl_group_id = depl_group['id'].split('/')[-1]
+        dpl_grp_name = depl_group.get('name')
+
+        affected_rsc_name = f'Update Deployment Group: {dpl_grp_name or depl_group_id}'
+        affected_rsc_description = affected_rsc_name
+        affected_rsc_uri = f'deployment-groups/{depl_group_id}?deployment-groups-detail-tab=apps'
+
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
-                          'subs_description': app['name'],
+                          'subs_description': sc['name'],
                           'method_ids': sc['method-ids'],
-                          'resource_name': 'update deployment group',
-                          'resource_description': 'deployment group',
-                          'resource_uri': url,
-                          'metric': sc['criteria']['metric'],
-                          'value': 'true',
+                          'template': 'app-pub',
+                          'trigger_resource_path': 'apps/' + trigger_rsc.get('path', ''),
+                          'trigger_resource_name': trigger_rsc['name'],
+                          'resource_name': affected_rsc_name,
+                          'resource_description': affected_rsc_description,
+                          'resource_uri': affected_rsc_uri,
                           'timestamp': to_timestamp_utc(event.timestamp()),
                           'recovery': True})
 
@@ -216,18 +230,24 @@ class AppPublishedDeploymentsUpdateNotification(dict):
 
     def __init__(self, sc: SubscriptionCfg, event: Event):
         module_id = event.resource_id().split('_')[0]
-        dpls_update_url = f"deployments?select=all&view=table&deployment=module/id='{module_id}' " \
-                          f"and deployment-set=null"
-        app = event.resource_content()
+
+        trigger_rsc = event.resource_content()
+
+        affected_rsc_name = 'Update Deployments'
+        affected_rsc_description = affected_rsc_name
+        affected_rsc_uri = f"deployments?select=all&view=table&deployment=module/id='{module_id}' " \
+                                f"and deployment-set=null"
+
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],
                           'subs_name': sc['name'],
-                          'subs_description': app['name'],
+                          'subs_description': sc['name'],
                           'method_ids': sc['method-ids'],
-                          'resource_name': 'update deployments',
-                          'resource_description': 'deployment',
-                          'resource_uri': dpls_update_url,
-                          'metric': sc['criteria']['metric'],
-                          'value': 'true',
+                          'template': 'app-pub',
+                          'trigger_resource_path': 'apps/' + trigger_rsc.get('path', ''),
+                          'trigger_resource_name': trigger_rsc['name'],
+                          'resource_name': affected_rsc_name,
+                          'resource_description': affected_rsc_description,
+                          'resource_uri': affected_rsc_uri,
                           'timestamp': to_timestamp_utc(event.timestamp()),
                           'recovery': True})
