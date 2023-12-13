@@ -99,7 +99,7 @@ container ~ $ echo '@2023-03-25 01:00:00' > /etc/faketimerc
 run `docker build .`
 
 **If you're developing in a non-main branch**, please push your changes to the
-respective branch, and wait for Travis CI to finish the automated build. You'll
+respective branch, and wait for CI to finish the automated build. You'll
 find your Docker image in the [nuvladev](https://hub.docker.com/u/nuvladev)
 organization in Docker hub, names as _nuvladev/subs-notifs:\<branch\>_.
 
