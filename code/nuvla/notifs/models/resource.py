@@ -35,7 +35,7 @@ class Resource(dict):
         return self['description']
 
     def _canonical_timestamp(self, name):
-        if '.' in self[name]:
+        if self[name] and '.' in self[name]:
             return self[name].split('.')[0] + 'Z'
         return self[name]
 

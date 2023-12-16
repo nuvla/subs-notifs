@@ -9,23 +9,28 @@ class TestNuvlaEdgeResourceMetrics(unittest.TestCase):
     def test_init(self):
         assert 0 == len(NuvlaEdgeMetrics({}))
 
-    def test_metric_not_found(self):
-        nerm = NuvlaEdgeMetrics({'RESOURCES': {}, 'RESOURCES_PREV': {}})
+    def test_metric_not_found_none(self):
+        nerm = NuvlaEdgeMetrics({NuvlaEdgeMetrics.RESOURCES_KEY: None,
+                                 NuvlaEdgeMetrics.RESOURCES_PREV_KEY: None})
+        self.assert_metric_not_found(nerm)
 
-        with self.assertRaises(MetricNotFound) as context_mgr:
-            nerm._load_pct(nerm.RESOURCES_KEY)
-        self.assertEqual(str(context_mgr.exception),
-                         EX_MSG_TMPL_KEY_NOT_FOUND.format("'CPU'", 'RESOURCES'))
+    def test_metric_not_found_empty(self):
+        nerm = NuvlaEdgeMetrics({NuvlaEdgeMetrics.RESOURCES_KEY: {},
+                                 NuvlaEdgeMetrics.RESOURCES_PREV_KEY: {}})
+        self.assert_metric_not_found(nerm)
 
-        self.assertRaises(MetricNotFound, nerm._load_pct, nerm.RESOURCES_KEY)
-        self.assertRaises(MetricNotFound, nerm.load_pct_curr)
-        self.assertRaises(MetricNotFound, nerm.load_pct_prev)
-        self.assertRaises(MetricNotFound, nerm._ram_pct, nerm.RESOURCES_KEY)
-        self.assertRaises(MetricNotFound, nerm.ram_pct_curr)
-        self.assertRaises(MetricNotFound, nerm.ram_pct_prev)
+    def assert_metric_not_found(self, nerm):
+        assert None is nerm._load_pct(nerm.RESOURCES_KEY)
+        assert None is nerm.load_pct_curr()
+        assert None is nerm.load_pct_prev()
+        assert None is nerm._ram_pct(nerm.RESOURCES_KEY)
+        assert None is nerm.ram_pct_curr()
+        assert None is nerm.ram_pct_prev()
         assert None is nerm._disk_pct(nerm.RESOURCES_KEY, 'foo')
         assert None is nerm.disk_pct_curr('foo')
         assert None is nerm.disk_pct_prev('foo')
+        assert [] == nerm.net_tx_all()
+        assert [] == nerm.net_rx_all()
 
     def test_load_pct(self):
         nerm = NuvlaEdgeMetrics({

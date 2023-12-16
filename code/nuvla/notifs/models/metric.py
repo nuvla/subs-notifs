@@ -110,6 +110,8 @@ class NuvlaEdgeMetrics(Resource):
 
     @key_error_ex_handler
     def _load_pct(self, what: str) -> Union[None, float]:
+        if not self.get(what):
+            return
         cpu = self[what]['CPU']
         if not cpu:
             return
@@ -117,6 +119,8 @@ class NuvlaEdgeMetrics(Resource):
 
     @key_error_ex_handler
     def _ram_pct(self, what: str) -> Union[None, float]:
+        if not self.get(what):
+            return
         ram = self[what]['RAM']
         if not ram:
             return
@@ -124,6 +128,8 @@ class NuvlaEdgeMetrics(Resource):
 
     @key_error_ex_handler
     def _disk_pct(self, what: str, disk_name: str) -> Union[None, float]:
+        if not self.get(what):
+            return
         for disk in self[what].get('DISKS', []):
             if disk_name == disk['device']:
                 return 100 * disk['used'] / disk['capacity']
@@ -153,6 +159,8 @@ class NuvlaEdgeMetrics(Resource):
         return None
 
     def _default_gw_data(self) -> dict:
+        if not self.get(self.RESOURCES_KEY):
+            return {}
         gw_name = self.default_gw_name()
         if gw_name:
             for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
@@ -166,7 +174,7 @@ class NuvlaEdgeMetrics(Resource):
             log.error(msg)
             raise ValueError(msg)
 
-    def _default_gw_rxtx(self, kind: str) -> NENetMetric:
+    def _default_gw_rxtx(self, kind: str) -> Union[NENetMetric, None]:
         """
         Get Rx or Tx network metrics for default gateway.
 
@@ -176,12 +184,12 @@ class NuvlaEdgeMetrics(Resource):
         gw = self._default_gw_data()
         if gw:
             return self._from_metrics_data(kind, gw)
-        return NENetMetric()
+        return None
 
-    def default_gw_tx(self) -> NENetMetric:
+    def default_gw_tx(self) -> Union[NENetMetric, None]:
         return self._default_gw_rxtx(self.TX_KIND)
 
-    def default_gw_rx(self) -> NENetMetric:
+    def default_gw_rx(self) -> Union[NENetMetric, None]:
         return self._default_gw_rxtx(self.RX_KIND)
 
     def _net_rxtx_all(self, kind: str) -> List[NENetMetric]:
@@ -191,6 +199,8 @@ class NuvlaEdgeMetrics(Resource):
         :param kind: rx or tx
         :return:
         """
+        if not self.get(self.RESOURCES_KEY):
+            return []
         self._is_rxtx_kind(kind)
         res: List[NENetMetric] = []
         for v in self[self.RESOURCES_KEY].get(self.NET_STATS_KEY, []):
