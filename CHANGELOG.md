@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [0.0.14] - 2023-12-16
+
+### Change
+
+- Improve metrics matching if they are present but None.
+- Improve timestamp generation in NE notification.
+
 ## [0.0.13] - 2023-12-13
 
 ### Add
