@@ -51,7 +51,7 @@ class NuvlaEdgeNotification(dict):
                           'resource_name': metrics.name(),
                           'resource_description': metrics.description(),
                           'resource_uri': f'edge/{metrics.uuid()}',
-                          'timestamp': metrics.timestamp(),
+                          'timestamp': metrics.timestamp() or metrics.nuvla_timestamp(),
                           'recovery': False})
 
     def timestamp_as_nuvla_timestamp(self):

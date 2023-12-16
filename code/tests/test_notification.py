@@ -470,3 +470,26 @@ class TestNuvlaEdgeNotification(unittest.TestCase):
              'TIMESTAMP': '2022-08-02T15:21:46Z'})
         ne_notif = NuvlaEdgeNotification(sc, metrics)
         assert '' == ne_notif['condition_value']
+
+    def test_nuvla_timestamp(self):
+        sc = SubscriptionCfg({
+            'id': 'subscription-config/01',
+            'name': 'ne on/off',
+            'description': 'ne on/off',
+            'method-ids': [
+                'notification-method/a909e4da-3ceb-4c4b-bb48-31ef371c62ae'
+            ],
+            'criteria': {
+                'metric': 'state',
+                'kind': 'boolean',
+                'condition': 'no'
+            }})
+        timestamp = '2022-08-02T15:21:46Z'
+        metrics = NuvlaEdgeMetrics(
+            {'id': 'nuvlabox/01',
+             'NAME': 'Nuvlabox TBL Münchwilen AG Zürcherstrasse #1',
+             'DESCRIPTION': 'None - self-registration number 220171415421241',
+             'TIMESTAMP': None,
+             'NUVLA_TIMESTAMP': timestamp})
+        ne_notif = NuvlaEdgeNotification(sc, metrics)
+        assert ne_notif['timestamp'] == timestamp

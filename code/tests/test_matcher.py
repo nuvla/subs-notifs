@@ -45,6 +45,10 @@ class TestResourceSubsConfigMatcher(unittest.TestCase):
                                                  SubscriptionCfg({}))
 
     def test_timestamps(self):
+        r = Resource({'timestamp': None, 'nuvla_timestamp': None})
+        assert None == r.timestamp()
+        assert None == r.nuvla_timestamp()
+
         r = Resource({})
         self.assertRaises(KeyError, r.timestamp)
         self.assertRaises(KeyError, r.nuvla_timestamp)
