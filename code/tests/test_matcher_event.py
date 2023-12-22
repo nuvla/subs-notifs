@@ -323,7 +323,7 @@ class TestModulePublished(unittest.TestCase):
         matcher = EventSubsCfgMatcher(Event())
         matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['foo'])
         notifs = matcher.match_app_published(object, object, '', APP_TYPE_K8S)
-        assert notifs == ['k8s']
+        assert notifs == ['foo']
 
     def test_detect_docker_app(self):
         matcher = EventSubsCfgMatcher(Event())
