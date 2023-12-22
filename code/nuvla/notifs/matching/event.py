@@ -13,12 +13,16 @@ from nuvla.notifs.notification import BlackboxEventNotification, \
     AppPublishedAppsBouquetUpdateNotification, \
     AppAppBqPublishedDeploymentGroupUpdateNotification
 from nuvla.notifs.nuvla_api import init_nuvla_api
-from nuvla.notifs.nuvla_api import Api as Nuvla
+from nuvla.notifs.nuvla_api import Api as Nuvla, APP_TYPE_K8S, APP_TYPE_DOCKER
 
 log = get_logger('matcher-event')
 
 
 class EventSubsCfgMatcher:
+
+    APP_SIMPLE = [APP_TYPE_DOCKER,
+                  APP_TYPE_K8S]
+    APP_BOUQUET = ['applications_sets']
 
     def __init__(self, event: Event):
         self._e = event
@@ -478,44 +482,57 @@ class EventSubsCfgMatcher:
 
         notifs = []
 
-        if 'application' == module_subtype:
-            # A.1 simple deployment(s) need to be updated
-            try:
-                notifs.extend(
-                    self.notifs_to_update_simple_deployments_from_app(
-                        nuvla, module_id, subs_cfgs))
-            except Exception as ex:
-                log.exception('Failed reconciling for simple deployments on app: %s',
-                              exc_info=ex)
-
-            # A.2 deployment group needs to be updated
-            try:
-                notifs.extend(
-                    self.notifs_to_update_deployment_group_from_app(
-                        nuvla, module_id, subs_cfgs))
-            except Exception as ex:
-                log.exception('Failed reconciling for deployment groups on app: %s',
-                              exc_info=ex)
-
-            # A.3 subscription to Applications Bouquet.
-            try:
-                notifs.extend(
-                    self.notifs_to_update_apps_bouquets(nuvla, module_id, subs_cfgs))
-            except Exception as ex:
-                log.exception('Failed reconciling for application bouquets on app: %s',
-                              exc_info=ex)
-
-        if 'applications_sets' == module_subtype:
-            # B.1 deployment group needs to be updated
-            try:
-                notifs.extend(
-                    self.notifs_to_update_deployment_group_from_app_bq(
-                        nuvla, module_id, subs_cfgs))
-            except Exception as ex:
-                log.exception('Failed reconciling for deployment groups on app bouquet: %s',
-                              exc_info=ex)
+        if module_subtype in self.APP_SIMPLE:
+            self._match_app_published_app_simple(notifs, nuvla, module_id,
+                                                 subs_cfgs)
+        elif module_subtype in self.APP_BOUQUET:
+            self._match_app_published_app_bq(notifs, nuvla, module_id,
+                                             subs_cfgs)
+        else:
+           log.warning(f'Unknown module subtype: {module_subtype}. '
+                       f'Non notifications produced.')
 
         return notifs
+
+    def _match_app_published_app_bq(self, notifs, nuvla, module_id, subs_cfgs):
+        # B.1 deployment group needs to be updated
+        try:
+            notifs.extend(
+                self.notifs_to_update_deployment_group_from_app_bq(
+                    nuvla, module_id, subs_cfgs))
+        except Exception as ex:
+            log.exception(
+                'Failed reconciling for deployment groups on app bouquet: %s',
+                exc_info=ex)
+
+    def _match_app_published_app_simple(self, notifs, nuvla, module_id,
+                                        subs_cfgs):
+        # A.1 simple deployment(s) need to be updated
+        try:
+            notifs.extend(
+                self.notifs_to_update_simple_deployments_from_app(
+                    nuvla, module_id, subs_cfgs))
+        except Exception as ex:
+            log.exception(
+                'Failed reconciling for simple deployments on app: %s',
+                exc_info=ex)
+        # A.2 deployment group needs to be updated
+        try:
+            notifs.extend(
+                self.notifs_to_update_deployment_group_from_app(
+                    nuvla, module_id, subs_cfgs))
+        except Exception as ex:
+            log.exception('Failed reconciling for deployment groups on app: %s',
+                          exc_info=ex)
+        # A.3 Application Bouquet needs to be updated
+        try:
+            notifs.extend(
+                self.notifs_to_update_apps_bouquets(nuvla, module_id,
+                                                    subs_cfgs))
+        except Exception as ex:
+            log.exception(
+                'Failed reconciling for application bouquets on app: %s',
+                exc_info=ex)
 
     def match_module_published(self, subs_cfgs: List[SubscriptionCfg]) -> \
             List[Union[AppPublishedDeploymentsUpdateNotification,
