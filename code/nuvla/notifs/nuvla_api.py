@@ -3,6 +3,7 @@ import os
 import sys
 
 from nuvla.api import Api
+from nuvla.api.resources.module import APP_TYPE_K8S, APP_TYPE_DOCKER
 
 NUVLA_PROTO = 'http'
 NUVLA_ENDPOINT = 'api:8200'

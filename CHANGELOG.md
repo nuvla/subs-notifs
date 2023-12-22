@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.0.15] - 2023-12-22
+
+### Change
+
+- Fix: K8s app must be taken into account for app published notifications.
+
 ## [0.0.14] - 2023-12-16
 
 ### Change

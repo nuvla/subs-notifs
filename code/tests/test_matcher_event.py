@@ -1,6 +1,7 @@
 import unittest
 
-from nuvla.notifs.matching.event import EventSubsCfgMatcher
+from nuvla.notifs.matching.event import EventSubsCfgMatcher, APP_TYPE_K8S, \
+    APP_TYPE_DOCKER
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.models.subscription import SubscriptionCfg, \
     RESOURCE_KIND_APPLICATION_BOUQUET, RESOURCE_KIND_DEPLOYMENT
@@ -274,8 +275,6 @@ class TestModulePublished(unittest.TestCase):
             EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_not_published_appsbq]))
 
-
-
     def test_filter_module_publish_subscriptions_match(self):
         """Subscription must be enabled, match resource-kind and the criteria.
         """
@@ -319,3 +318,15 @@ class TestModulePublished(unittest.TestCase):
         assert 1 == len(
             EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_appsbq, subs_cfg_depl]))
+
+    def test_detect_kubernetes_app(self):
+        matcher = EventSubsCfgMatcher(Event())
+        matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['foo'])
+        notifs = matcher.match_app_published(object, object, '', APP_TYPE_K8S)
+        assert notifs == ['foo']
+
+    def test_detect_docker_app(self):
+        matcher = EventSubsCfgMatcher(Event())
+        matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['bar'])
+        notifs = matcher.match_app_published(object, object, '', APP_TYPE_DOCKER)
+        assert notifs == ['bar']
