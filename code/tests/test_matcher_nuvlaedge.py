@@ -275,6 +275,26 @@ class TestNuvlaEdgeSubsCfgMatcher(unittest.TestCase):
              'ONLINE_PREV': False}))
         assert nem.MATCHED_RECOVERY is nem.match_online(sc)
 
+    def test_skip_match_online(self):
+        """Matching of online/offline is skipped because the NuvlaEdge metrics
+        contain RESOURCES key, which indicates that the telemetry came from the
+        telemetry delivery loop not heartbeat.
+        """
+        sc = SubscriptionCfg(
+            {'criteria': {
+                'metric': 'state',
+                'kind': 'boolean',
+                'condition': 'no',
+                'value': 'true'
+            }})
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
+            'ONLINE': True,
+            'ONLINE_PREV': False,
+            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}},
+            'RESOURCES_PREV': {
+                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
+        assert None is nem.match_online(sc)
+
     def test_network_device_name(self):
 
         sc = SubscriptionCfg({'criteria': {}})

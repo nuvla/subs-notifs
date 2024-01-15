@@ -221,7 +221,23 @@ class NuvlaEdgeSubsCfgMatcher:
             return True
         return False
 
+    def _from_heartbeat(self):
+        """Returns True if metrics are from heartbeat.
+
+        The heuristics to know if the metrics are from heartbeat is to check if
+        the there are metrics under 'RESOURCES' key. If there are any, then this
+        means that the metrics came from the telemetry delivery loop. Otherwise,
+        the metrics are from the heartbeat event.
+        """
+        resources = self._m.get(NuvlaEdgeMetrics.RESOURCES_KEY, {})
+        if len(resources) == 0:
+            return True
+        return False
+
     def match_online(self, sc: SubscriptionCfg) -> Union[None, Dict]:
+        # FIXME: a temporary solution to avoid double online notification.
+        if not self._from_heartbeat():
+            return None
         if sc.is_metric_cond('state', 'no'):
             if self._went_offline():
                 return self.MATCHED
