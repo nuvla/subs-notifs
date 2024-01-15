@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.0.16] - 2024-01-15
+
+### Change
+
+- Workaround to avoid sending double notifications for the NuvlaEdge online event.
+ 
 ## [0.0.15] - 2023-12-22
 
 ### Change
