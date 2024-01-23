@@ -6,6 +6,7 @@ import elasticsearch
 import threading
 import time, datetime
 from nuvla.notifs.log import get_logger
+import signal
 
 kafka_topic_name = 'subscription-config'
 KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
@@ -101,6 +102,11 @@ def run_monitoring(elastic_instance):
 
 def main():
     es = elasticsearch.Elasticsearch(hosts=es_hosts())
+
+    def signal_handler(sig, frame):
+        act_on_deleted_subscriptions(es)
+
+    signal.signal(signal.SIGUSR1, signal_handler)
     if not es.indices.exists(es_index_deleted_subscriptions):
         es.indices.create(index=es_index_deleted_subscriptions, ignore=400)
     t1 = threading.Thread(target=fetch_deleted_subscriptions, args=(es,))
