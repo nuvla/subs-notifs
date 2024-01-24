@@ -1,5 +1,6 @@
 FROM python:3.8-alpine3.12
 
+# -S option is available only in alpine to create a system user
 RUN addgroup -S nonroot \
     && adduser -S alpine -G nonroot
 
