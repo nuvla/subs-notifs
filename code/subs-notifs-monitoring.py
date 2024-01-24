@@ -81,7 +81,7 @@ def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
             offset = 0
             ids_to_be_deleted.clear()
 
-        bulk_delete(elastic_instance, ids_rxtx_to_be_deleted, ES_INDEX_RXTX)
+        bulk_delete(elastic_instance, ids_rxtx_to_be_deleted, ES_INDEX_RXTX, True)
 
         time.sleep(0.05)
 
@@ -107,7 +107,7 @@ def search_if_present(elastic_instance, deleted_subscription_or_nuvlaedge_ids: [
         else:
             continue
         try:
-            result = elastic_instance.search(index=ES_INDEX_DELETED_ENTITIES, body=query, _source=False)
+            result = elastic_instance.search(index=ES_INDEX_RXTX, body=query, _source=False)
         except Exception as ex:
             log.error(f'Failed to fetch rx/tx data for {ids}: {ex}')
             continue
@@ -119,8 +119,8 @@ def search_if_present(elastic_instance, deleted_subscription_or_nuvlaedge_ids: [
 def bulk_delete(elastic_instance, ids, index, refresh=False):
     actions = ({
         '_op_type': 'delete',
-        '_id': ids
-    } for ids in ids)
+        '_id': _id
+    } for _id in ids)
 
     try:
         bulk(client=elastic_instance, actions=actions, index=index, refresh=refresh)
@@ -138,7 +138,7 @@ def run_monitoring(elastic_instance):
     delta = datetime.timedelta(days=1)
 
     time_to_check = datetime.datetime(year=curr_time.year, month=curr_time.month,
-                                      day=curr_time.day, hour=11, minute=10, second=0)
+                                      day=curr_time.day, hour=12, minute=44, second=0)
 
     while True:
         curr_time = datetime.datetime.now()
