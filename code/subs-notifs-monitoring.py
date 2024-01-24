@@ -106,7 +106,7 @@ def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
 
 def run_monitoring(elastic_instance):
     """
-        Run the monitoring every day at 16:22 UTC
+        Run the monitoring every day at midnight
     :param elastic_instance:
     :return:
     """
@@ -114,7 +114,7 @@ def run_monitoring(elastic_instance):
     delta = datetime.timedelta(days=1)
 
     time_to_check = datetime.datetime(year=curr_time.year, month=curr_time.month,
-                                      day=curr_time.day, hour=13, minute=22, second=0)
+                                      day=curr_time.day, hour=0, minute=0, second=0)
 
     while True:
         curr_time = datetime.datetime.now()
