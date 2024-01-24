@@ -3,6 +3,7 @@
 from kafka import KafkaConsumer
 import os
 import elasticsearch
+from elasticsearch.helpers import bulk
 import threading
 import time, datetime
 from nuvla.notifs.log import get_logger
@@ -59,23 +60,46 @@ def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
     query = {"query": {"match_all": {}}}
     while True:
         result = elastic_instance.search(index=es_index_deleted_subscriptions, body=query,
-                                         size=100)
+                                         size=500, _source=False)
         log.info(f'Found {len(result["hits"]["hits"])} deleted subscriptions')
         if len(result["hits"]["hits"]) == 0:
             log.info('No more deleted subscriptions to act on')
             break
 
-        # delete the ones
+        ids_to_be_deleted = []
+        ids_rxtx_to_be_deleted = set()
         for hit in result['hits']['hits']:
-            log.info(f'Found deleted subscription {hit["_id"]}')
+            ids_to_be_deleted.append(hit["_id"])
             rxtx_query = {"query": {"match": {"subs_id": hit["_id"]}}}
             try:
-                deleted = elastic_instance.delete_by_query(index=es_index_nuvlabox_rx_tx, body=rxtx_query)
-                log.info(f'Deleted {deleted} rx/tx data for {hit["_id"]}')
+                rxtx_result = elastic_instance.search(index=es_index_nuvlabox_rx_tx, body=rxtx_query, _source=False)
             except Exception as ex:
-                log.error(f'Failed to delete rx/tx data for {hit["_id"]}: {ex}')
-            finally:
-                elastic_instance.delete(index=es_index_deleted_subscriptions, id=hit["_id"], refresh=True)
+                log.error(f'Failed to fetch rx/tx data for {hit["_id"]}: {ex}')
+                continue
+            for rxtx_hit in rxtx_result['hits']['hits']:
+                ids_rxtx_to_be_deleted.add(rxtx_hit["_id"])
+
+        # use bulk api to delete all the rx/tx data
+        # and the deleted-subscriptions data
+        actions = ({
+            '_op_type': 'delete',
+            '_id': ids
+        } for ids in ids_to_be_deleted)
+
+        try:
+            bulk(client=elastic_instance, actions=actions, index=es_index_deleted_subscriptions, refresh=True)
+        except Exception as ex:
+            log.error(f'Exception in bulk delete in deleted-subscriptions: {ex}')
+
+        actions = ({
+            '_op_type': 'delete',
+            '_id': ids
+        } for ids in ids_rxtx_to_be_deleted)
+
+        try:
+            bulk(client=elastic_instance, actions=actions, index=es_index_nuvlabox_rx_tx, refresh=True)
+        except Exception as ex:
+            log.error(f'Exception in bulk delete in subsnotifs-rxtx: {ex}')
 
         time.sleep(0.05)
 
@@ -90,7 +114,7 @@ def run_monitoring(elastic_instance):
     delta = datetime.timedelta(days=1)
 
     time_to_check = datetime.datetime(year=curr_time.year, month=curr_time.month,
-                                      day=curr_time.day, hour=10, minute=43, second=0)
+                                      day=curr_time.day, hour=13, minute=22, second=0)
 
     while True:
         curr_time = datetime.datetime.now()
