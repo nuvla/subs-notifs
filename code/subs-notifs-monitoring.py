@@ -9,14 +9,14 @@ import time, datetime
 from nuvla.notifs.log import get_logger
 import signal
 
-kafka_topic_name_subscriptions = 'subscription-config'
-kafka_topic_name_nuvlaedges = 'nuvlabox'
+KAFKA_TOPIC_SUBS_CONFIG = 'subscription-config'
+KAFKA_TOPIC_NUVLAEDGES = 'nuvlabox'
 KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
 if 'KAFKA_BOOTSTRAP_SERVERS' in os.environ:
     KAFKA_BOOTSTRAP_SERVERS = os.environ['KAFKA_BOOTSTRAP_SERVERS'].split(',')
 ES_HOSTS = [{'host': 'es', 'port': 9200}]
-es_index_deleted_subscriptions = 'deleted-subscriptions'
-es_index_nuvlabox_rx_tx = 'subsnotifs-rxtx'
+ES_INDEX_DELETED_ENTITIES = 'subsnotifs-deleted-entities'
+ES_INDEX_RXTX = 'subsnotifs-rxtx'
 log = get_logger('monitoring')
 BULK_SIZE = 1000
 
@@ -41,12 +41,12 @@ def fetch_deleted_subscriptions_and_nuvlaedges(elastic_instance):
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         auto_offset_reset='earliest'
     )
-    topics = [kafka_topic_name_nuvlaedges, kafka_topic_name_subscriptions]
+    topics = [KAFKA_TOPIC_SUBS_CONFIG, KAFKA_TOPIC_NUVLAEDGES]
     kafka_consumer = KafkaConsumer(*topics, **config)
     for msg in kafka_consumer:
         log.debug(f'{msg.key} {msg.value}')
         if msg.value is None:
-            created = elastic_instance.index(index=es_index_deleted_subscriptions, body={}, id=msg.key)
+            created = elastic_instance.index(index=ES_INDEX_DELETED_ENTITIES, body={}, id=msg.key)
             log.info(f'Created deleted subscription {created["_id"]}')
 
 
@@ -63,7 +63,7 @@ def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
     offset = 0
     ids_to_be_deleted = []
     while True:
-        result = elastic_instance.search(index=es_index_deleted_subscriptions, body=query,
+        result = elastic_instance.search(index=ES_INDEX_DELETED_ENTITIES, body=query,
                                          size=500, _source=False, from_=offset)
         log.info(f'Found {len(result["hits"]["hits"])} deleted subscriptions')
         if len(result["hits"]["hits"]) == 0:
@@ -77,15 +77,15 @@ def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
         # use bulk api to delete all the rx/tx data
         # and the deleted-subscriptions data
         if len(ids_to_be_deleted) >= BULK_SIZE:
-            bulk_delete(elastic_instance, ids_to_be_deleted, es_index_deleted_subscriptions)
+            bulk_delete(elastic_instance, ids_to_be_deleted, ES_INDEX_DELETED_ENTITIES)
             offset = 0
             ids_to_be_deleted.clear()
 
-        bulk_delete(elastic_instance, ids_rxtx_to_be_deleted, es_index_nuvlabox_rx_tx)
+        bulk_delete(elastic_instance, ids_rxtx_to_be_deleted, ES_INDEX_RXTX)
 
         time.sleep(0.05)
 
-    bulk_delete(elastic_instance, ids_to_be_deleted, es_index_deleted_subscriptions, True)
+    bulk_delete(elastic_instance, ids_to_be_deleted, ES_INDEX_DELETED_ENTITIES, True)
     log.info('Done acting on deleted subscriptions')
 
 
@@ -107,7 +107,7 @@ def search_if_present(elastic_instance, deleted_subscription_or_nuvlaedge_ids: [
         else:
             continue
         try:
-            result = elastic_instance.search(index=es_index_deleted_subscriptions, body=query, _source=False)
+            result = elastic_instance.search(index=ES_INDEX_DELETED_ENTITIES, body=query, _source=False)
         except Exception as ex:
             log.error(f'Failed to fetch rx/tx data for {ids}: {ex}')
             continue
@@ -155,8 +155,8 @@ def main():
         act_on_deleted_subscriptions(es)
 
     signal.signal(signal.SIGUSR1, signal_handler)
-    if not es.indices.exists(es_index_deleted_subscriptions):
-        es.indices.create(index=es_index_deleted_subscriptions, ignore=400)
+    if not es.indices.exists(ES_INDEX_DELETED_ENTITIES):
+        es.indices.create(index=ES_INDEX_DELETED_ENTITIES, ignore=400)
     t1 = threading.Thread(target=fetch_deleted_subscriptions_and_nuvlaedges, args=(es,))
     t2 = threading.Thread(target=run_monitoring, args=(es,))
     t1.start()
