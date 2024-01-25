@@ -36,7 +36,7 @@ def es_hosts():
     return ES_HOSTS
 
 
-def fetch_deleted_subscriptions_and_nuvlaedges(elastic_instance):
+def fetch_deleted_entities(elastic_instance):
     config = dict(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         auto_offset_reset='earliest'
@@ -157,7 +157,7 @@ def main():
     signal.signal(signal.SIGUSR1, signal_handler)
     if not es.indices.exists(ES_INDEX_DELETED_ENTITIES):
         es.indices.create(index=ES_INDEX_DELETED_ENTITIES, ignore=400)
-    t1 = threading.Thread(target=fetch_deleted_subscriptions, args=(es,))
+    t1 = threading.Thread(target=fetch_deleted_entities, args=(es,))
     t2 = threading.Thread(target=run_monitoring, args=(es,))
     t1.start()
     t2.start()
