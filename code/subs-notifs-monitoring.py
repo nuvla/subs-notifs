@@ -155,8 +155,8 @@ def main():
         act_on_deleted_subscriptions(es)
 
     signal.signal(signal.SIGUSR1, signal_handler)
-    if not es.indices.exists(es_index_deleted_subscriptions):
-        es.indices.create(index=es_index_deleted_subscriptions, ignore=400)
+    if not es.indices.exists(ES_INDEX_DELETED_ENTITIES):
+        es.indices.create(index=ES_INDEX_DELETED_ENTITIES, ignore=400)
     t1 = threading.Thread(target=fetch_deleted_subscriptions, args=(es,))
     t2 = threading.Thread(target=run_monitoring, args=(es,))
     t1.start()
