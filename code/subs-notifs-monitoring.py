@@ -47,7 +47,7 @@ def fetch_deleted_entities(elastic_instance):
         log.debug(f'{msg.key} {msg.value}')
         if msg.value is None:
             created = elastic_instance.index(index=ES_INDEX_DELETED_ENTITIES, body={}, id=msg.key)
-            log.info(f'Created deleted subscription {created["_id"]}')
+            log.info(f'Created deleted entity record {created["_id"]}')
 
 
 def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
