@@ -13,9 +13,10 @@ from kafka import KafkaProducer
 INDEX_NAME = 'subsnotifs-rxtx'
 HOSTS = [{'host': 'localhost', 'port': 9200}]
 
-user_owner = 'user/bc62866b-2b64-47d9-b4dc-84670bfbfd8b'
-user_view = 'user/150f31e8-44e2-4e92-89d0-9c8695c845a4'
-kafka_topic = 'subscription-config'
+USER_OWNER = 'user/bc62866b-2b64-47d9-b4dc-84670bfbfd8b'
+USER_VIEW = 'user/150f31e8-44e2-4e92-89d0-9c8695c845a4'
+KAFKA_TOPIC_SUBS_CONFIG = 'subscription-config'
+KAFKA_TOPIC_NUVLAEDGES = 'nuvlabox'
 subs_conf = {
     'description': 'nb network cumulative Rx over 30 days',
     'category': 'notification',
@@ -24,18 +25,18 @@ subs_conf = {
     ],
     'updated': '2024-01-19T20:31:54.246Z',
     'created': '2024-01-02T18:07:35.440Z',
-    'updated-by': {user_owner},
-    'created-by': user_owner,
+    'updated-by': {USER_OWNER},
+    'created-by': USER_OWNER,
     'resource-type': 'subscription-config',
     'acl': {
         'edit-data': [
             'group/nuvla-admin'
         ],
         'owners': [
-            user_owner
+            USER_OWNER
         ],
         'view-acl': [
-            user_view
+            USER_VIEW
         ],
         'delete': [
             'group/nuvla-admin'
@@ -104,6 +105,7 @@ def create_subs_notif_data():
     # create random configuration
     for i in range(1000):
         subs_conf['id'] = f'subscription-config/8a120eec-8a73-4318-bf30-2aeeadc{i:03d}'
+        subs_conf['ne_id'] = f'nuvlabox/8a120eec-8a73-4318-bf30-2aeeadc{i:03d}'
         if i % 2 == 0:
             subs_conf['criteria'] = {
                 "metric": "network-rx",
@@ -122,7 +124,7 @@ def create_subs_notif_data():
                 "condition": ">",
                 "value": "0.1"
             }
-        future = producer.send(kafka_topic,
+        future = producer.send(KAFKA_TOPIC_SUBS_CONFIG,
                                key=bytes(subs_conf['id'], encoding='utf8'),
                                value=bytes(str(subs_conf), encoding='utf8'))
         try:
@@ -137,11 +139,21 @@ def create_subs_notif_data():
     # now send messages for deletion of subscription config
     for i in range(0, 500):
         _id = f'subscription-config/8a120eec-8a73-4318-bf30-2aeeadc{i:03d}'
-        producer.send(kafka_topic,
+        producer.send(KAFKA_TOPIC_SUBS_CONFIG,
                       key=bytes(_id, encoding='utf8'))
         print(f'produced: {_id} with no value')
         time.sleep(0.05)
     producer.flush()
+
+    #now send messages for deletion of nuvlabox
+    for i in range(500, 600):
+        _id = f'nuvlabox/8a120eec-8a73-4318-bf30-2aeeadc{i:03d}'
+        producer.send(KAFKA_TOPIC_NUVLAEDGES,
+                      key=bytes(_id, encoding='utf8'))
+        print(f'produced: {_id} with no value')
+        time.sleep(0.05)
+    producer.flush()
+
     producer.close()
 
 

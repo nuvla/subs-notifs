@@ -3,19 +3,22 @@
 from kafka import KafkaConsumer
 import os
 import elasticsearch
+from elasticsearch.helpers import bulk
 import threading
 import time, datetime
 from nuvla.notifs.log import get_logger
 import signal
 
-kafka_topic_name = 'subscription-config'
+KAFKA_TOPIC_SUBS_CONFIG = 'subscription-config'
+KAFKA_TOPIC_NUVLAEDGES = 'nuvlabox'
 KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
 if 'KAFKA_BOOTSTRAP_SERVERS' in os.environ:
     KAFKA_BOOTSTRAP_SERVERS = os.environ['KAFKA_BOOTSTRAP_SERVERS'].split(',')
 ES_HOSTS = [{'host': 'es', 'port': 9200}]
-es_index_deleted_subscriptions = 'deleted-subscriptions'
-es_index_nuvlabox_rx_tx = 'subsnotifs-rxtx'
+ES_INDEX_DELETED_ENTITIES = 'subsnotifs-deleted-entities'
+ES_INDEX_RXTX = 'subsnotifs-rxtx'
 log = get_logger('monitoring')
+BULK_SIZE = 1000
 
 
 def es_hosts():
@@ -33,17 +36,17 @@ def es_hosts():
     return ES_HOSTS
 
 
-def fetch_deleted_subscriptions(elastic_instance):
+def fetch_deleted_subscriptions_and_nuvlaedges(elastic_instance):
     config = dict(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         auto_offset_reset='earliest'
     )
-    kafka_consumer = KafkaConsumer(kafka_topic_name, **config)
+    topics = [KAFKA_TOPIC_SUBS_CONFIG, KAFKA_TOPIC_NUVLAEDGES]
+    kafka_consumer = KafkaConsumer(*topics, **config)
     for msg in kafka_consumer:
         log.debug(f'{msg.key} {msg.value}')
         if msg.value is None:
-            log.info(f'{msg.key} was deleted')
-            created = elastic_instance.index(index=es_index_deleted_subscriptions, body={}, id=msg.key)
+            created = elastic_instance.index(index=ES_INDEX_DELETED_ENTITIES, body={}, id=msg.key)
             log.info(f'Created deleted subscription {created["_id"]}')
 
 
@@ -57,32 +60,77 @@ def act_on_deleted_subscriptions(elastic_instance: elasticsearch.Elasticsearch):
     """
     log.info('Acting on deleted subscriptions')
     query = {"query": {"match_all": {}}}
+    offset = 0
+    ids_to_be_deleted = []
     while True:
-        result = elastic_instance.search(index=es_index_deleted_subscriptions, body=query,
-                                         size=100)
+        result = elastic_instance.search(index=ES_INDEX_DELETED_ENTITIES, body=query,
+                                         size=500, _source=False, from_=offset)
         log.info(f'Found {len(result["hits"]["hits"])} deleted subscriptions')
         if len(result["hits"]["hits"]) == 0:
             log.info('No more deleted subscriptions to act on')
             break
 
-        # delete the ones
-        for hit in result['hits']['hits']:
-            log.info(f'Found deleted subscription {hit["_id"]}')
-            rxtx_query = {"query": {"match": {"subs_id": hit["_id"]}}}
-            try:
-                deleted = elastic_instance.delete_by_query(index=es_index_nuvlabox_rx_tx, body=rxtx_query)
-                log.info(f'Deleted {deleted} rx/tx data for {hit["_id"]}')
-            except Exception as ex:
-                log.error(f'Failed to delete rx/tx data for {hit["_id"]}: {ex}')
-            finally:
-                elastic_instance.delete(index=es_index_deleted_subscriptions, id=hit["_id"], refresh=True)
+        ids_rxtx_to_be_deleted = search_if_present(elastic_instance, [hit["_id"] for hit in result['hits']['hits']])
+
+        offset += len(result["hits"]["hits"])
+        ids_to_be_deleted.extend([hit["_id"] for hit in result['hits']['hits']])
+        # use bulk api to delete all the rx/tx data
+        # and the deleted-subscriptions data
+        if len(ids_to_be_deleted) >= BULK_SIZE:
+            bulk_delete(elastic_instance, ids_to_be_deleted, ES_INDEX_DELETED_ENTITIES)
+            offset = 0
+            ids_to_be_deleted.clear()
+
+        bulk_delete(elastic_instance, ids_rxtx_to_be_deleted, ES_INDEX_RXTX, True)
 
         time.sleep(0.05)
+
+    bulk_delete(elastic_instance, ids_to_be_deleted, ES_INDEX_DELETED_ENTITIES, True)
+    log.info('Done acting on deleted subscriptions')
+
+
+def search_if_present(elastic_instance, deleted_subscription_or_nuvlaedge_ids: []) -> set:
+    """
+        Search for deleted subscription or nuvlaedge id in the deleted-subscriptions index
+
+    :param deleted_subscription_or_nuvlaedge_ids: Provide the ids that needs to be used
+        for deletion of rx/tx data
+    :param elastic_instance: Elasticsearch instance
+    :return: The _ids of complete record if present based on the subscription or nuvlaedge id
+    """
+    ids_rxtx_to_be_deleted = set()
+    for ids in deleted_subscription_or_nuvlaedge_ids:
+        if ids.startswith('nuvlabox'):
+            query = {"query": {"match": {"ne_id": ids}}}
+        elif ids.startswith('subscription-config'):
+            query = {"query": {"match": {"subs_id": ids}}}
+        else:
+            continue
+        try:
+            result = elastic_instance.search(index=ES_INDEX_RXTX, body=query, _source=False)
+        except Exception as ex:
+            log.error(f'Failed to fetch rx/tx data for {ids}: {ex}')
+            continue
+        for hit in result['hits']['hits']:
+            ids_rxtx_to_be_deleted.add(hit["_id"])
+    return ids_rxtx_to_be_deleted
+
+
+def bulk_delete(elastic_instance, ids, index, refresh=False):
+    actions = ({
+        '_op_type': 'delete',
+        '_id': _id
+    } for _id in ids)
+
+    try:
+        bulk(client=elastic_instance, actions=actions, index=index, refresh=refresh)
+    except Exception as ex:
+        log.error(f'Exception in bulk delete: {ex}')
 
 
 def run_monitoring(elastic_instance):
     """
-        Run the monitoring every day at 16:22 UTC
+        Run the monitoring every day at midnight
     :param elastic_instance:
     :return:
     """
@@ -90,7 +138,7 @@ def run_monitoring(elastic_instance):
     delta = datetime.timedelta(days=1)
 
     time_to_check = datetime.datetime(year=curr_time.year, month=curr_time.month,
-                                      day=curr_time.day, hour=10, minute=43, second=0)
+                                      day=curr_time.day, hour=12, minute=44, second=0)
 
     while True:
         curr_time = datetime.datetime.now()
