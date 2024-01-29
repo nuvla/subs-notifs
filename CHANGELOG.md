@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Change
+
+- New microservice to monitor deleted entities (subscription, NuvlaEdge etc.) 
+  and clean up the associated Rx/Tx metrics. 
+
 ## [0.0.16] - 2024-01-15
 
 ### Change
