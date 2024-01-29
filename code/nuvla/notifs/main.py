@@ -12,6 +12,7 @@ import threading
 import traceback
 from typing import List
 
+from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG
 from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
@@ -32,23 +33,6 @@ NE_TELEM_GROUP_ID = NE_TELEM_TOPIC
 EVENTS_TOPIC = os.environ.get('EVENTS_TOPIC', 'event')
 EVENTS_GROUP_ID = EVENTS_TOPIC
 NOTIF_TOPIC = 'NOTIFICATIONS_S'
-DB_FILENAME = '/opt/subs-notifs/subs-notifs.db'
-ES_HOSTS = [{'host': 'es', 'port': 9200}]
-
-
-def es_hosts():
-    """
-    Expected env var: ES_HOSTS=es1:9201,es2:92002
-    :return:
-    """
-    if 'ES_HOSTS' in os.environ:
-        es_conf = []
-        for es in os.environ['ES_HOSTS'].split(','):
-            host, port = es.split(':')
-            es_conf.append({'host': host, 'port': int(port)})
-        if es_conf:
-            return es_conf
-    return ES_HOSTS
 
 
 def consumer_id(base='consumer') -> str:
@@ -175,7 +159,7 @@ def main():
 
     signal.signal(signal.SIGUSR1, print_sub_conf)
 
-    dyn_subs_cfgs = SelfUpdatingSubsCfgs('subscription-config',
+    dyn_subs_cfgs = SelfUpdatingSubsCfgs(KAFKA_TOPIC_SUBS_CONFIG,
                                          KafkaUpdater(SUBS_CONF_TOPIC))
 
     t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry,
