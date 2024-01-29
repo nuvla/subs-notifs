@@ -9,7 +9,8 @@ from es_patch import get_elasticmock
 elasticmock = get_elasticmock()
 
 from fake_updater import get_updater
-from nuvla.notifs.main import es_hosts, ES_HOSTS, populate_ne_net_db, \
+from nuvla.notifs.common import es_hosts, ES_HOSTS
+from nuvla.notifs.main import populate_ne_net_db, \
     wait_sc_populated
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.subscription import SubscriptionCfg, \

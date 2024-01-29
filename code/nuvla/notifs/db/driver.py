@@ -46,9 +46,12 @@ sum(map(lambda x: x[1] - x[0], [[1, 2], [0, 4]])) => 5
 """
 
 import math
+import time
 from typing import Union, List
 
 import elasticsearch
+from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk as es_bulk
 
 from nuvla.notifs.log import get_logger, loglevel_from_env, stdout_handler
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
@@ -89,7 +92,7 @@ class RxTxDriverES:
     HOSTS = [{'host': 'localhost', 'port': 9200}]
     RESULT_WINDOW = 10000
 
-    def __init__(self, hosts:Union[None, list] = None):
+    def __init__(self, hosts: Union[None, list] = None):
         """
         :param hosts: list of config dicts: {'host': 'localhost', 'port': 9200}
         """
@@ -435,3 +438,46 @@ class RxTxDB:
 
     def __repr__(self):
         return str(self._db)
+
+
+def es_get_all_records(es_instance, index, query):
+    """
+    Fetch all the records from `index` matching `query`.
+
+    :param es_instance: Elasticsearch instance
+    :param index: Index to be searched
+    :param query: Query to be used
+    :return: IDs of the found records
+    """
+    offset = 0
+    found_records = []
+    while True:
+        try:
+            result = es_instance.search(index=index, body=query,
+                                        size=50, _source=False, from_=offset)
+        except Exception as ex:
+            log.error(f'Failed to fetch records for {index} query {query}: {ex}')
+            break
+        log.debug(f'Found {len(result["hits"]["hits"])} records')
+        if len(result["hits"]["hits"]) == 0:
+            log.debug(f'No more records to search for query {query}')
+            break
+
+        offset += len(result["hits"]["hits"])
+        found_records.extend([hit["_id"] for hit in result['hits']['hits']])
+        time.sleep(0.05)
+    return found_records
+
+
+def es_delete_bulk(es: Elasticsearch, ids, index, refresh=False) -> bool:
+    actions = ({
+        '_op_type': 'delete',
+        '_id': _id
+    } for _id in ids)
+
+    try:
+        es_bulk(client=es, actions=actions, index=index, refresh=refresh)
+    except Exception as ex:
+        log.error(f'Exception in bulk delete: {ex}')
+        return False
+    return True
