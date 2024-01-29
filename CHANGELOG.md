@@ -7,6 +7,12 @@
 - New microservice to monitor deleted entities (subscription, NuvlaEdge etc.) 
   and clean up the associated Rx/Tx metrics. 
 
+## [0.0.17] - 2024-01-17
+
+### Change
+
+- Improve detection of possible double notifications for the NuvlaEdge online event.
+
 ## [0.0.16] - 2024-01-15
 
 ### Change
