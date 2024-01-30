@@ -179,11 +179,11 @@ class TestEventNotification(dict):
 
         super().__init__({
             'id': event.id(),
-            'resource_name': event.name(),
+            'resource_name': 'FAKE RESOURCE',
             'resource_description': event.description(),
-            'subs_name': content['name'],
+            'subs_name': f'TEST {content["name"]}',
             'subs_description': content['description'],
-            'resource_uri': event.name(),
+            'resource_uri': 'notifications',
             'method_ids': [event.resource_id()],
             'timestamp': to_timestamp_utc(event.timestamp())
         })
