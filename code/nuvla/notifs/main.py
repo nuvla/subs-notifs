@@ -115,6 +115,8 @@ def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
         notifs = matcher.match_blackbox(subs_cfgs)
     elif matcher.is_event_module_published():
         notifs = matcher.match_module_published(subs_cfgs)
+    elif matcher.is_event_test_notification():
+        notifs = matcher.match_test_notification()
     else:
         log.warning('Unknown event type for processing: %s', event)
         return

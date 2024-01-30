@@ -11,7 +11,8 @@ from nuvla.notifs.models.subscription import SubscriptionCfg, \
 from nuvla.notifs.notification import BlackboxEventNotification, \
     AppPublishedDeploymentsUpdateNotification, \
     AppPublishedAppsBouquetUpdateNotification, \
-    AppAppBqPublishedDeploymentGroupUpdateNotification
+    AppAppBqPublishedDeploymentGroupUpdateNotification, \
+    TestEventNotification
 from nuvla.notifs.nuvla_api import init_nuvla_api
 from nuvla.notifs.nuvla_api import Api as Nuvla, APP_TYPE_K8S, APP_TYPE_DOCKER
 
@@ -48,6 +49,9 @@ class EventSubsCfgMatcher:
     def is_event_blackbox_created(self):
         return self._e.content_match_href('^data-record/.*') and \
             self._e.content_is_state('created')
+
+    def is_event_test_notification(self):
+        return self._e.is_name('test.notification')
 
     def match_blackbox(self, subs_cfgs: List[SubscriptionCfg]) -> List[
             BlackboxEventNotification]:
@@ -533,6 +537,21 @@ class EventSubsCfgMatcher:
             log.exception(
                 'Failed reconciling for application bouquets on app: %s',
                 exc_info=ex)
+
+    def match_test_notification(self) -> List[TestEventNotification]:
+        if not self.is_event_test_notification():
+            return []
+
+        log.debug('Matching test notification event.')
+
+        notifs = []
+
+        notif = TestEventNotification(self._e)
+
+        if notif.is_valid():
+            notifs.append(notif)
+
+        return notifs
 
     def match_module_published(self, subs_cfgs: List[SubscriptionCfg]) -> \
             List[Union[AppPublishedDeploymentsUpdateNotification,

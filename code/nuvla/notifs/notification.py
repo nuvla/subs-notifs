@@ -65,7 +65,6 @@ class NuvlaEdgeNotification(dict):
 
 
 class NuvlaEdgeNotificationBuilder:
-
     METRIC_NAME_MAP = {
         'disk': 'NE disk %',
         'ram': 'NE ram %',
@@ -173,6 +172,29 @@ class BlackboxEventNotification(dict):
                           'recovery': True})
 
 
+class TestEventNotification(dict):
+
+    def __init__(self, event: Event):
+        content = event.resource_content()
+
+        super().__init__({
+            'id': event.id(),
+            'resource_name': event.name(),
+            'resource_description': event.description(),
+            'subs_name': content['name'],
+            'subs_description': content['description'],
+            'resource_uri': event.name(),
+            'method_ids': [event.resource_id()],
+            'timestamp': to_timestamp_utc(event.timestamp())
+        })
+
+        if event.resource_id() == '':
+            self['valid'] = False
+
+    def is_valid(self):
+        return self.get('valid', True)
+
+
 class AppPublishedAppsBouquetUpdateNotification(dict):
 
     def __init__(self, affected_app_bq: dict, sc: SubscriptionCfg, event: Event):
@@ -196,7 +218,6 @@ class AppPublishedAppsBouquetUpdateNotification(dict):
                           'resource_uri': affected_rsc_uri,
                           'timestamp': to_timestamp_utc(event.timestamp()),
                           'recovery': True})
-
 
 
 class AppAppBqPublishedDeploymentGroupUpdateNotification(dict):
@@ -236,7 +257,7 @@ class AppPublishedDeploymentsUpdateNotification(dict):
         affected_rsc_name = 'Update Deployments'
         affected_rsc_description = affected_rsc_name
         affected_rsc_uri = f"deployments?select=all&view=table&deployment=module/id='{module_id}' " \
-                                f"and deployment-set=null"
+                           f"and deployment-set=null"
 
         super().__init__({'id': sc['id'],
                           'subs_id': sc['id'],

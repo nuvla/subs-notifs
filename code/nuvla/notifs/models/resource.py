@@ -31,6 +31,9 @@ class Resource(dict):
     def name(self):
         return self['name']
 
+    def id(self):
+        return self['id']
+
     def description(self):
         return self['description']
 
