@@ -5,6 +5,10 @@
 ## [0.0.18] - 2024-01-29
 
 ### Change
+- Added support for test notification that triggers notification for situations
+  when user wants to test the notification mechanism.
+
+### Change
 
 - New microservice to monitor deleted entities (subscription, NuvlaEdge) 
   and clean up the associated Rx/Tx metrics. 
