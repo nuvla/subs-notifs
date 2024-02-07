@@ -15,6 +15,7 @@ from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
     ProcessCollector
 import nuvla.notifs.stats.metrics as metrics
 
+metrics.namespace = 'subs_notifs_monitoring'
 log = get_logger('monitoring')
 
 BULK_SIZE = 1000
@@ -131,7 +132,6 @@ def install_signal_handler(es: Elasticsearch):
 
 def main():
     es = es_instance()
-    metrics.namespace = 'subs_notifs_monitoring'
     REGISTRY.unregister(PROCESS_COLLECTOR)
     ProcessCollector(namespace=metrics.namespace)
     install_signal_handler(es)
