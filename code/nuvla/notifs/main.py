@@ -12,7 +12,7 @@ import threading
 import traceback
 from typing import List
 
-from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG, prometheus_server_port
+from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG, prometheus_exporter_port
 from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
@@ -37,7 +37,7 @@ NE_TELEM_GROUP_ID = NE_TELEM_TOPIC
 EVENTS_TOPIC = os.environ.get('EVENTS_TOPIC', 'event')
 EVENTS_GROUP_ID = EVENTS_TOPIC
 NOTIF_TOPIC = 'NOTIFICATIONS_S'
-DEFAULT_PROMETHEUS_SERVER_PORT = 9137
+DEFAULT_PROMETHEUS_EXPORTER_PORT = 9137
 
 
 def consumer_id(base='consumer') -> str:
@@ -190,7 +190,7 @@ def main():
     # define process collector and start http server for prometheus
     REGISTRY.unregister(PROCESS_COLLECTOR)
     ProcessCollector(namespace=namespace)
-    start_http_server(prometheus_server_port(DEFAULT_PROMETHEUS_SERVER_PORT))
+    start_http_server(prometheus_exporter_port(DEFAULT_PROMETHEUS_EXPORTER_PORT))
     PROCESS_STATES.state('idle')
 
     t1.start()
