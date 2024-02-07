@@ -19,8 +19,11 @@ SUBSCRIPTION_CONFIGS = Gauge('subscription_configs', 'Number of subscription con
                              ['type'], namespace=namespace)
 
 PROCESS_STATES = Enum('process_states', 'State of the process',
-                      states=['idle', 'processing', 'error - recoverable', 'error - need restart'],
+                      states=['idle', 'processing', 'error - recoverable', 'error - need intervention'],
                       namespace=namespace)
 
 ES_INDEX_DOCS_DELETED = Counter('es_index_docs_deleted', 'Number of documents deleted from an index',
                                 ['index', 'id'], namespace=namespace)
+
+INTERVENTION_ERRORS = Gauge('intervention_errors', 'Error Occured in Intervention',
+                            labelnames=['key', 'value'], namespace=namespace)

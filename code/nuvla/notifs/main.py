@@ -26,7 +26,7 @@ from nuvla.notifs.matching.event import EventSubsCfgMatcher
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.stats.metrics import (PACKETS_ERROR, PACKETS_PROCESSED, PROCESS_STATES,
-                                        namespace, PROCESSING_TIME)
+                                        namespace, PROCESSING_TIME, INTERVENTION_ERRORS)
 from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
     ProcessCollector
 
@@ -176,6 +176,7 @@ def main():
     def print_sub_conf(signum, trace):
         log.info(f'Subscription configs:\n{pformat(dyn_subs_cfgs)}')
 
+    INTERVENTION_ERRORS.labels('Starting', 'main').set(0)
     signal.signal(signal.SIGUSR1, print_sub_conf)
 
     dyn_subs_cfgs = SelfUpdatingSubsCfgs(KAFKA_TOPIC_SUBS_CONFIG,

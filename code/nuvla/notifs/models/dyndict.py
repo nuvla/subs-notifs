@@ -127,15 +127,19 @@ class SelfUpdatingDict(LoggingDict):
                 try:
                     del self[k][key]
                     SUBSCRIPTION_CONFIGS.labels(k).dec()
+                    log.debug('Deleted sub-key: %s from %s', key, k)
                 except KeyError as ex:
                     log.warning('Deleting sub-key: no key %s under %s', str(ex), k)
         else:
             rk = value.get('resource-kind')
+            if rk is None:
+                return
             if rk not in self._dict_data_class.resource_kinds():
                 self._resource_kind_not_known(rk)
             if rk in self:
                 if key not in self[rk]:
                     SUBSCRIPTION_CONFIGS.labels(rk).inc()
+                    log.debug('Added sub-key: %s to %s', key, rk)
                 self[rk].update({key: self._dict_data_class(value)})
             else:
                 self._log_caller()
@@ -143,7 +147,7 @@ class SelfUpdatingDict(LoggingDict):
                 super().__setitem__(rk, {})
                 dict.__setitem__(self[rk], key, self._dict_data_class(value))
                 SUBSCRIPTION_CONFIGS.labels(rk).inc()
-
+                log.debug('Added sub-key: %s to %s', key, rk)
         if log.level == logging.DEBUG:
             log.debug('current keys:')
             for k in self.keys():
