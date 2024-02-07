@@ -25,6 +25,11 @@ from nuvla.notifs.matching.ne_telem import NuvlaEdgeSubsCfgMatcher
 from nuvla.notifs.matching.event import EventSubsCfgMatcher
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.event import Event
+from nuvla.notifs.stats.thread_stats import ThreadStats
+from nuvla.notifs.stats.metrics import PACKETS_ERROR, PACKETS_PROCESSED, PROCESS_STATES, \
+    SUBSCRIPTIONS_CONFIGS
+from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
+    ProcessCollector
 
 log = get_logger('main')
 
@@ -97,13 +102,17 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
                               client_id=consumer_id(NE_TELEM_GROUP_ID),
                               auto_offset_reset='latest'):
         try:
+            PROCESS_STATES.state('processing')
             msg.value['id'] = msg.key
             process_ne_telem(msg.value,
                              list(subs_cfgs.get(RESOURCE_KIND_NE, {}).values()),
                              net_db, notif_publisher)
+            PACKETS_PROCESSED.labels('NE_Telemetry', f'{msg.key}').inc()
+            PROCESS_STATES.state('idle')
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error('Failed processing %s with: %s', msg.key, ex)
+            PACKETS_ERROR.labels('NE_Telemetry', f'{msg.key}', f'{type(ex)}').inc()
 
 
 def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
@@ -138,15 +147,19 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                               client_id=consumer_id(EVENTS_GROUP_ID),
                               auto_offset_reset='latest'):
         try:
+            PROCESS_STATES.state('processing')
             msg.value['id'] = msg.key
             subs_cfgs_events = []
             for rk in resource_kinds:
                 subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
 
             process_event(msg.value, subs_cfgs_events, notif_publisher)
+            PACKETS_PROCESSED.labels('Event', f'{msg.key}').inc()
+            PROCESS_STATES.state('idle')
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error('Failed processing %s with: %s', msg.key, ex)
+            PACKETS_ERROR.labels('Event', f'{msg.key}', f'{type(ex)}').inc()
 
 
 def local_time():
@@ -164,11 +177,19 @@ def main():
     dyn_subs_cfgs = SelfUpdatingSubsCfgs(KAFKA_TOPIC_SUBS_CONFIG,
                                          KafkaUpdater(SUBS_CONF_TOPIC))
 
-    t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry,
-                          args=(dyn_subs_cfgs,), daemon=True)
-    t2 = threading.Thread(target=subs_notif_event, args=(dyn_subs_cfgs,),
-                          daemon=True)
+    t1 = ThreadStats(target=subs_notif_nuvla_edge_telemetry,
+                     args=(dyn_subs_cfgs,), daemon=True, _type='NE_Telemetry')
+    t2 = ThreadStats(target=subs_notif_event, args=(dyn_subs_cfgs,),
+                     daemon=True, _type='Event')
     t3 = threading.Thread(target=local_time, daemon=True)
+
+    # define process collector and start http server for prometheus
+    REGISTRY.unregister(PROCESS_COLLECTOR)
+    ProcessCollector(namespace='subs_notifs')
+    start_http_server(9137)
+    PROCESS_STATES.state('idle')
+    SUBSCRIPTIONS_CONFIGS.set_function(lambda: len(dyn_subs_cfgs))
+
     t1.start()
     t2.start()
     t3.start()
