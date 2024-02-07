@@ -12,7 +12,7 @@ import threading
 import traceback
 from typing import List
 
-from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG
+from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG, prometheus_server_port
 from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
@@ -37,6 +37,7 @@ NE_TELEM_GROUP_ID = NE_TELEM_TOPIC
 EVENTS_TOPIC = os.environ.get('EVENTS_TOPIC', 'event')
 EVENTS_GROUP_ID = EVENTS_TOPIC
 NOTIF_TOPIC = 'NOTIFICATIONS_S'
+DEFAULT_PROMETHEUS_SERVER_PORT = 9137
 
 
 def consumer_id(base='consumer') -> str:
@@ -107,8 +108,8 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
             process_ne_telem(msg.value,
                              list(subs_cfgs.get(RESOURCE_KIND_NE, {}).values()),
                              net_db, notif_publisher)
-            PROCESSING_TIME.labels('NE_Telemetry').set(time.time() - start)
-            PACKETS_PROCESSED.labels('NE_Telemetry', f'{msg.key}').inc()
+            PROCESSING_TIME.labels('NE_Telemetry', msg.key).set(time.time() - start)
+            PACKETS_PROCESSED.labels('NE_Telemetry', msg.key).inc()
             PROCESS_STATES.state('idle')
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
@@ -156,7 +157,7 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                 subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
 
             process_event(msg.value, subs_cfgs_events, notif_publisher)
-            PROCESSING_TIME.labels('Event').set(time.time() - start)
+            PROCESSING_TIME.labels('Event', f'{msg.value["name"]} - {msg.key}').set(time.time() - start)
             PACKETS_PROCESSED.labels('Event', f'{msg.key}').inc()
             PROCESS_STATES.state('idle')
         except Exception as ex:
@@ -189,7 +190,7 @@ def main():
     # define process collector and start http server for prometheus
     REGISTRY.unregister(PROCESS_COLLECTOR)
     ProcessCollector(namespace=namespace)
-    start_http_server(9137)
+    start_http_server(prometheus_server_port(DEFAULT_PROMETHEUS_SERVER_PORT))
     PROCESS_STATES.state('idle')
 
     t1.start()

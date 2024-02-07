@@ -4,7 +4,7 @@ namespace = 'subs_notifs'
 
 PROCESSING_TIME = Gauge(f'{namespace}_message_processing_time', 'Time spent in processing of a telemetry packet or '
                                                                 'event',
-                        ['type'])
+                        ['type', 'message_info'])
 
 PACKETS_PROCESSED = Counter(f'{namespace}_packets_processed', 'Number of telemetry packets processed',
                             ['type', 'id'])

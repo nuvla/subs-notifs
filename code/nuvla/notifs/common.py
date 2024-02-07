@@ -24,3 +24,7 @@ def es_hosts():
         if es_conf:
             return es_conf
     return ES_HOSTS
+
+
+def prometheus_server_port(default_port):
+    return int(os.environ.get('PROMETHEUS_SERVER_PORT', default_port))
