@@ -26,8 +26,7 @@ from nuvla.notifs.matching.event import EventSubsCfgMatcher
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.stats.thread_stats import ThreadStats
-from nuvla.notifs.stats.metrics import PACKETS_ERROR, PACKETS_PROCESSED, PROCESS_STATES, \
-    SUBSCRIPTIONS_CONFIGS, namespace
+from nuvla.notifs.stats.metrics import PACKETS_ERROR, PACKETS_PROCESSED, PROCESS_STATES, namespace
 from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
     ProcessCollector
 
