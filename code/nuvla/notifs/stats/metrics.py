@@ -1,5 +1,4 @@
-from prometheus_client import Summary, Counter, Gauge, \
-    Histogram, Info, Enum
+from prometheus_client import Counter, Gauge, Enum
 
 PROCESSING_TIME = Gauge('message_processing_time', 'Time spent in processing of a telemetry packet or event',
                         ['type'])
