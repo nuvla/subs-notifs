@@ -10,6 +10,7 @@ from nuvla.notifs.common import es_hosts, ES_INDEX_RXTX, ES_INDEX_DELETED_ENTITI
     KAFKA_TOPIC_SUBS_CONFIG, KAFKA_TOPIC_NUVLAEDGES, KAFKA_BOOTSTRAP_SERVERS
 from nuvla.notifs.db.driver import es_get_all_records, es_delete_bulk
 from nuvla.notifs.log import get_logger
+from prometheus_client import start_http_server
 
 log = get_logger('monitoring')
 
@@ -129,6 +130,7 @@ def main():
 
     install_signal_handler(es)
 
+    start_http_server(9137)
     t1 = threading.Thread(target=fetch_deleted_entities, args=(es,))
     t2 = threading.Thread(target=schedule_entities_deletion, args=(es,))
     t1.start()
