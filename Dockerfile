@@ -32,4 +32,4 @@ VOLUME /srv/nuvla/shared
 ENV PYTHONPATH=/opt/nuvla/
 
 EXPOSE 9137
-ENTRYPOINT ["./subs-notifs.py"]
+ENTRYPOINT ["./subs-notifs.py --log=DEBUG"]
