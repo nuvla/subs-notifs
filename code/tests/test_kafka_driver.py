@@ -36,4 +36,4 @@ class TestKafkaUpdater(unittest.TestCase):
                 r_list.append(msg)
             kc.return_value = r_list
             ku.run(d).join()
-        assert d == {'a': 1, 'b': 2}
+        assert d == {'a': {'key': 1}, 'b': {'key': 2}}
