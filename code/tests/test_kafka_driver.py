@@ -29,11 +29,11 @@ class TestKafkaUpdater(unittest.TestCase):
         ku = KafkaUpdater('test')
         with mock.patch('nuvla.notifs.kafka_driver.kafka_consumer') as kc:
             r_list = []
-            for k, v in zip(['a', 'b'], [{'key': 1}, {'key': 2}]):
+            for k, v in zip(['a', 'b'], [1, {'key': 2}]):
                 msg = mock.MagicMock()
                 msg.key = k
                 msg.value = v
                 r_list.append(msg)
             kc.return_value = r_list
             ku.run(d).join()
-        assert d == {'a': {'key': 1}, 'b': {'key': 2}}
+        assert d == {'b': {'key': 2}}
