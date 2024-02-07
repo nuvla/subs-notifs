@@ -10,6 +10,7 @@ from typing import List, Type
 
 from nuvla.notifs.dictupdater import DictUpdater
 from nuvla.notifs.log import get_logger
+from nuvla.notifs.stats.metrics import SUBSCRIPTION_CONFIGS
 
 log = get_logger('dyndict')
 
@@ -125,6 +126,7 @@ class SelfUpdatingDict(LoggingDict):
             for k in self.keys():
                 try:
                     del self[k][key]
+                    SUBSCRIPTION_CONFIGS.labels(k).dec()
                 except KeyError as ex:
                     log.warning('Deleting sub-key: no key %s under %s', str(ex), k)
         else:
@@ -138,6 +140,7 @@ class SelfUpdatingDict(LoggingDict):
                 log.debug('adding new resource-kind: %s', rk)
                 super().__setitem__(rk, {})
                 dict.__setitem__(self[rk], key, self._dict_data_class(value))
+            SUBSCRIPTION_CONFIGS.labels(rk).inc()
 
         if log.level == logging.DEBUG:
             log.debug('current keys:')

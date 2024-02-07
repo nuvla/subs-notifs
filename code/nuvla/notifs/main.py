@@ -27,7 +27,7 @@ from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.stats.thread_stats import ThreadStats
 from nuvla.notifs.stats.metrics import PACKETS_ERROR, PACKETS_PROCESSED, PROCESS_STATES, \
-    SUBSCRIPTIONS_CONFIGS
+    SUBSCRIPTIONS_CONFIGS, namespace
 from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
     ProcessCollector
 
@@ -185,10 +185,9 @@ def main():
 
     # define process collector and start http server for prometheus
     REGISTRY.unregister(PROCESS_COLLECTOR)
-    ProcessCollector(namespace='subs_notifs')
+    ProcessCollector(namespace=namespace)
     start_http_server(9137)
     PROCESS_STATES.state('idle')
-    SUBSCRIPTIONS_CONFIGS.set_function(lambda: len(dyn_subs_cfgs))
 
     t1.start()
     t2.start()
