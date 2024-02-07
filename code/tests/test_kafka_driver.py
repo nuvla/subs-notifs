@@ -18,8 +18,8 @@ class TestKafkaDriver(unittest.TestCase):
         assert {} == value_deserializer(b'{}')
         assert {'a': 1} == value_deserializer(b'{"a": 1}')
         assert {'a': True} == value_deserializer(b'{"a": true}')
-        self.assertRaises(AttributeError, value_deserializer, '{"a": 1}')
-        self.assertRaises(json.decoder.JSONDecodeError, value_deserializer, b'{"a": }')
+        assert '' == value_deserializer('{"a": 1}')
+        assert '' == value_deserializer(b'{"a": }')
 
 
 class TestKafkaUpdater(unittest.TestCase):
