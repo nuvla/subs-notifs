@@ -11,12 +11,8 @@ from nuvla.notifs.common import es_hosts, ES_INDEX_RXTX, ES_INDEX_DELETED_ENTITI
     prometheus_exporter_port
 from nuvla.notifs.db.driver import es_get_all_records, es_delete_bulk
 from nuvla.notifs.log import get_logger
-<<<<<<< HEAD
-from prometheus_client import start_http_server
-=======
 from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
     ProcessCollector
->>>>>>> bf092dd (Added prometheus monitoring)
 import nuvla.notifs.stats.metrics as metrics
 
 log = get_logger('monitoring')
