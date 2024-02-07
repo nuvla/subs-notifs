@@ -1,6 +1,6 @@
 from prometheus_client import Counter, Gauge, Enum
 
-namespace = 'subs-notifs'
+namespace = 'subs_notifs'
 
 PROCESSING_TIME = Gauge(f'{namespace}_message_processing_time', 'Time spent in processing of a telemetry packet or '
                                                                 'event',
