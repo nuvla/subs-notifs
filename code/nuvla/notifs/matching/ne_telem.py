@@ -221,7 +221,7 @@ class NuvlaEdgeSubsCfgMatcher:
             return True
         return False
 
-    def _from_heartbeat(self):
+    def _status_from_heartbeat(self):
         """Returns True if metrics are from heartbeat.
 
         The heuristics to know if the metrics are from heartbeat is to check if
@@ -236,9 +236,21 @@ class NuvlaEdgeSubsCfgMatcher:
             return False
         return True
 
+    def _status_from_telemetry(self):
+        return not self._status_from_heartbeat()
+
+    NE_VERSION_HEARTBEAT_INTRO = (2, 12, 0)
+
+    def _match_online_skip(self):
+        """Skip online notification when the metrics are from telemetry
+        and the version of the NuvlaEdge implementation is greater than
+        NE_VERSION_HEARTBEAT_INTRO."""
+        return self._status_from_telemetry() \
+            and (self._m.ne_version() >= self.NE_VERSION_HEARTBEAT_INTRO)
+
     def match_online(self, sc: SubscriptionCfg) -> Union[None, Dict]:
         # FIXME: a temporary solution to avoid double online notification.
-        if not self._from_heartbeat():
+        if self._match_online_skip():
             return None
         if sc.is_metric_cond('state', 'no'):
             if self._went_offline():

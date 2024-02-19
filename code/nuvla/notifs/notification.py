@@ -1,7 +1,6 @@
 import json
 from typing import List, Dict, Union
 
-from nuvla.api.resources.deployment import Deployment
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger
@@ -179,13 +178,14 @@ class TestEventNotification(dict):
 
         super().__init__({
             'id': event.id(),
-            'resource_name': 'FAKE RESOURCE',
-            'resource_description': event.description(),
-            'subs_name': f'TEST {content["name"]}',
-            'subs_description': content['description'],
-            'resource_uri': 'notifications',
+            'subs_name': 'Notification Test',
+            'subs_description': 'Notification Test',
             'method_ids': [event.resource_id()],
-            'timestamp': to_timestamp_utc(event.timestamp())
+            'resource_name': content['name'],
+            'resource_description': event.description(),
+            'resource_uri': 'notifications?notifications-tab=methods',
+            'timestamp': to_timestamp_utc(event.timestamp()),
+            'recovery': True
         })
 
         if event.resource_id() == '':
