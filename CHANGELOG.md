@@ -3,8 +3,16 @@
 ## Unreleased
 
 ### Change
+
+## [0.0.19] - 2024-02-19
+
+### Add
+
 - Added support for test notification that triggers notification for situations
   when user wants to test the notification mechanism.
+
+### Change
+
 - Fix: in online notification account for NuvlaEdge versions before heartbeat 
   was introduced.
 
