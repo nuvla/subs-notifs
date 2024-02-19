@@ -1,7 +1,6 @@
 import json
 from typing import List, Dict, Union
 
-from nuvla.api.resources.deployment import Deployment
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.kafka_driver import kafka_producer
 from nuvla.notifs.log import get_logger

@@ -275,10 +275,11 @@ class TestNuvlaEdgeSubsCfgMatcher(unittest.TestCase):
              'ONLINE_PREV': False}))
         assert nem.MATCHED_RECOVERY is nem.match_online(sc)
 
-    def test_skip_match_online(self):
+    def test_match_online_heartbeat_related(self):
         """Matching of online/offline is skipped because the NuvlaEdge metrics
         contain RESOURCES key, which indicates that the telemetry came from the
-        telemetry delivery loop not heartbeat.
+        telemetry delivery loop not heartbeat and only if the version of the
+        NuvaEdge is equal or above certain version when heartbeat was introduced.
         """
         sc = SubscriptionCfg(
             {'criteria': {
@@ -287,13 +288,43 @@ class TestNuvlaEdgeSubsCfgMatcher(unittest.TestCase):
                 'condition': 'no',
                 'value': 'true'
             }})
+
+        # The status is coming from telemetry, but we are not matching as the
+        # version of the NuvlaEdge is EQUAL to the version when heartbeat was
+        # introduced.
         nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
-            'ONLINE': True,
+            NuvlaEdgeMetrics.NE_VERSION_KEY: '.'.join(str(x) for x in NuvlaEdgeSubsCfgMatcher.NE_VERSION_HEARTBEAT_INTRO),
             'ONLINE_PREV': False,
-            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}},
-            'RESOURCES_PREV': {
-                'CPU': {'load': 3.0, 'capacity': 4, 'topic': 'cpu'}}}))
-        assert None is nem.match_online(sc)
+            'ONLINE': True,
+            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}}}))
+        assert nem.match_online(sc) is None
+
+        # The status is coming from telemetry, but we are not matching as the
+        # version of the NuvlaEdge is ABOVE to the version when heartbeat was
+        # introduced.
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
+            NuvlaEdgeMetrics.NE_VERSION_KEY: '99.99.9',
+            'ONLINE_PREV': False,
+            'ONLINE': True,
+            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}}}))
+        assert nem.match_online(sc) is None
+
+        # The status is coming from heartbeat, so we are matching even the version
+        # is below the version when heartbeat was introduced.
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
+            NuvlaEdgeMetrics.NE_VERSION_KEY: '0.0.1',
+            'ONLINE_PREV': False,
+            'ONLINE': True}))
+        assert nem.match_online(sc) is nem.MATCHED_RECOVERY
+
+        # The status is coming from telemetry, we are matching as the version of
+        # the NuvlaEdge is BELOW the version when heartbeat was introduced.
+        nem = NuvlaEdgeSubsCfgMatcher(NuvlaEdgeMetrics({
+            NuvlaEdgeMetrics.NE_VERSION_KEY: '0.0.1',
+            'ONLINE_PREV': False,
+            'ONLINE': True,
+            'RESOURCES': {'CPU': {'load': 3.5, 'capacity': 4, 'topic': 'cpu'}}}))
+        assert nem.match_online(sc) is nem.MATCHED_RECOVERY
 
     def test_network_device_name(self):
 
