@@ -93,6 +93,7 @@ class NuvlaEdgeMetrics(Resource):
 
     RESOURCES_KEY = 'RESOURCES'
     RESOURCES_PREV_KEY = 'RESOURCES_PREV'
+    NE_VERSION_KEY = 'NUVLABOX_ENGINE_VERSION'
 
     NET_KEY = 'NETWORK'
     NET_STATS_KEY = 'net-stats'
@@ -218,3 +219,9 @@ class NuvlaEdgeMetrics(Resource):
                             'kind': kind,
                             'iface': net_metrics['interface'],
                             'value': net_metrics[self.NET_RXTX_KEY_MAP[kind]]})
+
+    def ne_version(self) -> tuple:
+        ver = self[self.NE_VERSION_KEY]
+        if not ver:
+            return 0, 0, 0
+        return tuple(int(x) for x in ver.split('.'))
