@@ -12,7 +12,7 @@ import threading
 import traceback
 from typing import List
 
-from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG
+from nuvla.notifs.common import es_hosts, KAFKA_TOPIC_SUBS_CONFIG, prometheus_exporter_port
 from nuvla.notifs.db.driver import RxTxDB, RxTxDriverES
 from nuvla.notifs.log import get_logger
 from nuvla.notifs.models.subscription import SelfUpdatingSubsCfgs, \
@@ -25,6 +25,10 @@ from nuvla.notifs.matching.ne_telem import NuvlaEdgeSubsCfgMatcher
 from nuvla.notifs.matching.event import EventSubsCfgMatcher
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.models.event import Event
+from nuvla.notifs.stats.metrics import (PACKETS_ERROR, PACKETS_PROCESSED, PROCESS_STATES,
+                                        namespace, PROCESSING_TIME, INTERVENTION_ERRORS)
+from prometheus_client import start_http_server, REGISTRY, PROCESS_COLLECTOR, \
+    ProcessCollector
 
 log = get_logger('main')
 
@@ -33,6 +37,7 @@ NE_TELEM_GROUP_ID = NE_TELEM_TOPIC
 EVENTS_TOPIC = os.environ.get('EVENTS_TOPIC', 'event')
 EVENTS_GROUP_ID = EVENTS_TOPIC
 NOTIF_TOPIC = 'NOTIFICATIONS_S'
+DEFAULT_PROMETHEUS_EXPORTER_PORT = 9137
 
 
 def consumer_id(base='consumer') -> str:
@@ -97,13 +102,19 @@ def subs_notif_nuvla_edge_telemetry(subs_cfgs: SelfUpdatingSubsCfgs):
                               client_id=consumer_id(NE_TELEM_GROUP_ID),
                               auto_offset_reset='latest'):
         try:
+            start = time.time()
+            PROCESS_STATES.state('processing')
             msg.value['id'] = msg.key
             process_ne_telem(msg.value,
                              list(subs_cfgs.get(RESOURCE_KIND_NE, {}).values()),
                              net_db, notif_publisher)
+            PROCESSING_TIME.labels('NE_Telemetry', msg.key).set(time.time() - start)
+            PACKETS_PROCESSED.labels('NE_Telemetry', msg.key).inc()
+            PROCESS_STATES.state('idle')
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error('Failed processing %s with: %s', msg.key, ex)
+            PACKETS_ERROR.labels('NE_Telemetry', f'{msg.key}', f'{type(ex)}').inc()
 
 
 def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
@@ -138,15 +149,21 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                               client_id=consumer_id(EVENTS_GROUP_ID),
                               auto_offset_reset='latest'):
         try:
+            PROCESS_STATES.state('processing')
+            start = time.time()
             msg.value['id'] = msg.key
             subs_cfgs_events = []
             for rk in resource_kinds:
                 subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
 
             process_event(msg.value, subs_cfgs_events, notif_publisher)
+            PROCESSING_TIME.labels('Event', f'{msg.value["name"]} - {msg.key}').set(time.time() - start)
+            PACKETS_PROCESSED.labels('Event', f'{msg.key}').inc()
+            PROCESS_STATES.state('idle')
         except Exception as ex:
             log.error(''.join(traceback.format_tb(ex.__traceback__)))
             log.error('Failed processing %s with: %s', msg.key, ex)
+            PACKETS_ERROR.labels('Event', f'{msg.key}', f'{type(ex)}').inc()
 
 
 def local_time():
@@ -159,16 +176,24 @@ def main():
     def print_sub_conf(signum, trace):
         log.info(f'Subscription configs:\n{pformat(dyn_subs_cfgs)}')
 
+    INTERVENTION_ERRORS.labels('Starting', 'main').set(0)
     signal.signal(signal.SIGUSR1, print_sub_conf)
 
     dyn_subs_cfgs = SelfUpdatingSubsCfgs(KAFKA_TOPIC_SUBS_CONFIG,
                                          KafkaUpdater(SUBS_CONF_TOPIC))
 
     t1 = threading.Thread(target=subs_notif_nuvla_edge_telemetry,
-                          args=(dyn_subs_cfgs,), daemon=True)
+                     args=(dyn_subs_cfgs,), daemon=True)
     t2 = threading.Thread(target=subs_notif_event, args=(dyn_subs_cfgs,),
-                          daemon=True)
+                     daemon=True)
     t3 = threading.Thread(target=local_time, daemon=True)
+
+    # define process collector and start http server for prometheus
+    REGISTRY.unregister(PROCESS_COLLECTOR)
+    ProcessCollector(namespace=namespace)
+    start_http_server(prometheus_exporter_port(DEFAULT_PROMETHEUS_EXPORTER_PORT))
+    PROCESS_STATES.state('idle')
+
     t1.start()
     t2.start()
     t3.start()

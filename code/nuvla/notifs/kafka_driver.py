@@ -12,6 +12,7 @@ from nuvla.notifs.dictupdater import DictUpdater
 
 from kafka import KafkaConsumer
 from kafka import KafkaProducer
+from nuvla.notifs.stats.metrics import PROCESS_STATES, INTERVENTION_ERRORS
 
 log = get_logger('kafka-driver')
 
@@ -27,7 +28,16 @@ def key_deserializer(key: bytes):
 def value_deserializer(value: Union[bytes, None]):
     if isinstance(value, type(None)):
         return None
-    return json.loads(value.decode())
+    try:
+        val = value.decode()
+    except Exception as ex:
+        log.error('Failed to decode value (%s) : %s', value, ex)
+        return ''
+    try:
+        return json.loads(val)
+    except Exception as ex:
+        log.error('Failed to parse value (%s) : %s', val, ex)
+        return ''
 
 
 def kafka_consumer(topic, group_id, client_id=None, bootstrap_servers=None,
@@ -68,4 +78,9 @@ class KafkaUpdater(DictUpdater):
             group_name = self.topic_name
         for msg in kafka_consumer(self.topic_name, group_id=group_name,
                                   auto_offset_reset='earliest'):
-            yield {msg.key: msg.value}
+            if isinstance(msg.value, (type(None), dict)):
+                yield {msg.key: msg.value}
+            else:
+                log.error('Unexpected message key : %s value: %s', msg.key, msg.value)
+                PROCESS_STATES.state('error - need intervention')
+                INTERVENTION_ERRORS.labels(msg.key, msg.value).inc()

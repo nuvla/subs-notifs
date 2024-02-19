@@ -57,6 +57,7 @@ from nuvla.notifs.log import get_logger, loglevel_from_env, stdout_handler
 from nuvla.notifs.models.metric import NuvlaEdgeMetrics
 from nuvla.notifs.db.schema.rxtx import RxTx, RxTxEntry
 from nuvla.notifs.models.subscription import SubscriptionCfg
+from nuvla.notifs.stats.metrics import ES_INDEX_DOCS_DELETED
 
 log = get_logger('db')
 
@@ -480,4 +481,6 @@ def es_delete_bulk(es: Elasticsearch, ids, index, refresh=False) -> bool:
     except Exception as ex:
         log.error(f'Exception in bulk delete: {ex}')
         return False
+    for _id in ids:
+        ES_INDEX_DOCS_DELETED.labels(index=index, id=_id).inc()
     return True

@@ -30,4 +30,6 @@ RUN rm -rf /opt/nuvla/nuvla
 
 VOLUME /srv/nuvla/shared
 ENV PYTHONPATH=/opt/nuvla/
+
+EXPOSE 9137
 ENTRYPOINT ["./subs-notifs.py"]

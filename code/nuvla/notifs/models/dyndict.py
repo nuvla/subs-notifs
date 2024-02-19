@@ -10,6 +10,7 @@ from typing import List, Type
 
 from nuvla.notifs.dictupdater import DictUpdater
 from nuvla.notifs.log import get_logger
+from nuvla.notifs.stats.metrics import SUBSCRIPTION_CONFIGS
 
 log = get_logger('dyndict')
 
@@ -125,23 +126,32 @@ class SelfUpdatingDict(LoggingDict):
             for k in self.keys():
                 try:
                     del self[k][key]
+                    SUBSCRIPTION_CONFIGS.labels(k).dec()
+                    log.debug('Deleted sub-key: %s from %s', key, k)
                 except KeyError as ex:
                     log.warning('Deleting sub-key: no key %s under %s', str(ex), k)
         else:
             rk = value.get('resource-kind')
+            if rk is None:
+                return
             if rk not in self._dict_data_class.resource_kinds():
                 self._resource_kind_not_known(rk)
             if rk in self:
+                if key not in self[rk]:
+                    SUBSCRIPTION_CONFIGS.labels(rk).inc()
+                    log.debug('Added sub-key: %s to %s', key, rk)
                 self[rk].update({key: self._dict_data_class(value)})
             else:
                 self._log_caller()
                 log.debug('adding new resource-kind: %s', rk)
                 super().__setitem__(rk, {})
                 dict.__setitem__(self[rk], key, self._dict_data_class(value))
-
+                SUBSCRIPTION_CONFIGS.labels(rk).inc()
+                log.debug('Added sub-key: %s to %s', key, rk)
         if log.level == logging.DEBUG:
             log.debug('current keys:')
             for k in self.keys():
+                log.debug('   %s: %s', k, len(self[k].keys()))
                 log.debug('   %s: %s', k, list(self[k].keys()))
 
     def wait_not_empty(self, timeout=5):

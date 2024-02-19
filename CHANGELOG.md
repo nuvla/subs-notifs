@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-### Change
+### Add
+
+- Expose internal business metrics for Prometheus scraping. 
 
 ## [0.0.19] - 2024-02-19
 

@@ -1,4 +1,3 @@
-import json
 import unittest
 
 import mock
@@ -18,8 +17,8 @@ class TestKafkaDriver(unittest.TestCase):
         assert {} == value_deserializer(b'{}')
         assert {'a': 1} == value_deserializer(b'{"a": 1}')
         assert {'a': True} == value_deserializer(b'{"a": true}')
-        self.assertRaises(AttributeError, value_deserializer, '{"a": 1}')
-        self.assertRaises(json.decoder.JSONDecodeError, value_deserializer, b'{"a": }')
+        assert '' == value_deserializer('{"a": 1}')
+        assert '' == value_deserializer(b'{"a": }')
 
 
 class TestKafkaUpdater(unittest.TestCase):
@@ -29,11 +28,11 @@ class TestKafkaUpdater(unittest.TestCase):
         ku = KafkaUpdater('test')
         with mock.patch('nuvla.notifs.kafka_driver.kafka_consumer') as kc:
             r_list = []
-            for k, v in zip(['a', 'b'], [1, 2]):
+            for k, v in zip(['a', 'b'], [1, {'key': 2}]):
                 msg = mock.MagicMock()
                 msg.key = k
                 msg.value = v
                 r_list.append(msg)
             kc.return_value = r_list
             ku.run(d).join()
-        assert d == {'a': 1, 'b': 2}
+        assert d == {'b': {'key': 2}}
