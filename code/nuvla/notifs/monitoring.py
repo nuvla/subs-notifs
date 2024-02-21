@@ -19,7 +19,7 @@ metrics.namespace = 'subs_notifs_monitoring'
 log = get_logger('monitoring')
 
 BULK_SIZE = 1000
-DEFAULT_PROMETHEUS_EXPORTER_PORT = 9139
+DEFAULT_PROMETHEUS_EXPORTER_PORT = 9137
 
 
 def fetch_deleted_entities(elastic_instance):
