@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.0.21] - 2024-02-21
+
+### Change
+
+- Fix exposed port number.
+
 ## [0.0.20] - 2024-02-21
 
 ### Add
