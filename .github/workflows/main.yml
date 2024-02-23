@@ -38,6 +38,15 @@ jobs:
         run: |
           pytest tests/ --junitxml=test-report.xml -v
 
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          args: >
+            -Dsonar.verbose=true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       - name: Multi-arch docker image build prerequired
         run: sudo docker run --privileged linuxkit/binfmt:v0.7
 
@@ -52,12 +61,6 @@ jobs:
         if: always()
         with:
           files: code/test-report.xml
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   notify:
     if: always()
