@@ -130,3 +130,7 @@ dmypy.json
 
 .idea
 test-report.xml
+
+# Sonar
+.scannerwork
+hadolint-output.json

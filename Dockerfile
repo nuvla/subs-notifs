@@ -23,7 +23,7 @@ COPY nuvla/notifs requirements.txt subs-notifs.py subs-notifs-monitoring.py LICE
 
 WORKDIR /opt/nuvla/
 
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 RUN mv /opt/nuvla/notifs /usr/local/lib/python3.8/site-packages/nuvla/ \
     && rm -rf /opt/nuvla/notifs

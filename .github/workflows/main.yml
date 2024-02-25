@@ -34,15 +34,17 @@ jobs:
           ln -sf $(pwd)/code/nuvla/notifs $SITE_PACKAGES/nuvla/
 
       - name: Run unit tests
-        working-directory: code
         run: |
-          pytest tests/ --junitxml=test-report.xml -v
+          pytest --junitxml=test-report.xml --cov=. --cov-report=xml --cov-config=coverage.rc
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@master
+        with:
+          dockerfile: "Dockerfile*"
+          output-file: "hadolint-output.json"
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
-        with:
-          args: >
-            -Dsonar.verbose=true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
