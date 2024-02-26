@@ -46,15 +46,17 @@ jobs:
 
       - name: List files
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN_S: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN_V: ${{ vars.SONAR_TOKEN }}
         run: |
           pwd
           ls -la
           cat sonar-project.properties
-          echo $SONAR_TOKEN
+          echo $SONAR_TOKEN_S
+          echo $SONAR_TOKEN_V
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-github-action@v2.1.1
         with:
           args: >
             -Dsonar.organization=nuvla 
@@ -64,7 +66,7 @@ jobs:
           projectBaseDir: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
 
       - name: Multi-arch docker image build prerequired
         run: sudo docker run --privileged linuxkit/binfmt:v0.7
