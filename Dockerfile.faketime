@@ -19,18 +19,19 @@ LABEL org.opencontainers.image.vendor="SixSq SA"
 LABEL org.opencontainers.image.title="Subscriptions to telemetry notifications"
 LABEL org.opencontainers.image.description="Based on a stream of telemetry and user subscriptions produces notifications."
 
-COPY code LICENSE /opt/nuvla/
+COPY nuvla/ requirements.txt subs-notifs.py subs-notifs-monitoring.py LICENSE /opt/nuvla/
 
 WORKDIR /
 RUN apk add git make gcc musl-dev
-RUN git clone https://github.com/wolfcw/libfaketime.git
-WORKDIR /libfaketime/src
-RUN make install
+RUN git clone https://github.com/wolfcw/libfaketime.git \
+    && cd libfaketime/src \
+    && git checkout v0.9.10 \
+    && make install
 
 WORKDIR /opt/nuvla/
 
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN mv notifs /usr/local/lib/python3.8/site-packages/nuvla/ \
+    && rm -rf notifs __*
 
-VOLUME /srv/nuvla/shared
-ENV PYTHONPATH=/opt/nuvla/
 ENTRYPOINT ["/bin/sh", "-c", "LD_PRELOAD=/usr/local/lib/faketime/libfaketime.so.1 FAKETIME_CACHE_DURATION=5 ./subs-notifs.py"]

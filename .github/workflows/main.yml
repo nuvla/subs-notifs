@@ -26,17 +26,52 @@ jobs:
 
       - name: Install test requirements
         run: |
-          python3 -m pip install --upgrade -r code/requirements.tests.txt
+          python3 -m pip install --upgrade -r requirements.tests.txt
 
       - name: Make internal packages part of nuvla-api distribution
         run: |
           export SITE_PACKAGES=$(dirname $(python3 -c 'import os; print(os.__file__)'))/site-packages
-          ln -sf $(pwd)/code/nuvla/notifs $SITE_PACKAGES/nuvla/
+          ln -sf $(pwd)/nuvla/notifs $SITE_PACKAGES/nuvla/
 
       - name: Run unit tests
-        working-directory: code
         run: |
-          pytest tests/ --junitxml=test-report.xml -v
+          pytest --junitxml=test-report.xml --cov=. --cov-report=xml --cov-config=coverage.rc
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@master
+        with:
+          dockerfile: "Dockerfile*"
+          output-file: "hadolint-output.json"
+          no-fail: true
+
+      - name: Project version
+        id: project_version
+        run: |
+          VERSION=$( cat version.txt )
+          echo "::set-output name=version::$VERSION"
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2.1.1
+        with:
+          args:
+            -Dsonar.projectVersion=${{ steps.project_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
+
+      - name: jq for SonarQube Quality Gate check
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: SonarQube Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
+        # Force to fail step after specific time
+        timeout-minutes: 5
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
 
       - name: Multi-arch docker image build prerequired
         run: sudo docker run --privileged linuxkit/binfmt:v0.7
@@ -51,7 +86,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v1
         if: always()
         with:
-          files: code/test-report.xml
+          files: test-report.xml
 
   notify:
     if: always()
