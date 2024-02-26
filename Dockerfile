@@ -19,17 +19,12 @@ LABEL org.opencontainers.image.vendor="SixSq SA"
 LABEL org.opencontainers.image.title="Subscriptions to telemetry notifications"
 LABEL org.opencontainers.image.description="Based on a stream of telemetry and user subscriptions produces notifications."
 
-COPY nuvla/notifs requirements.txt subs-notifs.py subs-notifs-monitoring.py LICENSE /opt/nuvla/
+COPY nuvla/ requirements.txt subs-notifs.py subs-notifs-monitoring.py LICENSE /opt/nuvla/
 
 WORKDIR /opt/nuvla/
 
 RUN pip install --no-cache-dir -r requirements.txt
-
-RUN mv /opt/nuvla/notifs /usr/local/lib/python3.8/site-packages/nuvla/ \
-    && rm -rf /opt/nuvla/notifs
-
-VOLUME /srv/nuvla/shared
-ENV PYTHONPATH=/opt/nuvla/
+RUN mv notifs /usr/local/lib/python3.8/site-packages/nuvla/ && rm -rf notifs __*
 
 EXPOSE 9137
 ENTRYPOINT ["./subs-notifs.py"]
