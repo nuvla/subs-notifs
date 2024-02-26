@@ -58,15 +58,10 @@ jobs:
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.1.1
         with:
-          args: >
-            -Dsonar.organization=nuvla 
-            -Dsonar.projectKey=nuvla_subs-notifs 
-            -Dsonar.verbose=true 
-            -X
-          projectBaseDir: .
+          args: -X
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
 
       - name: Multi-arch docker image build prerequired
         run: sudo docker run --privileged linuxkit/binfmt:v0.7
