@@ -44,21 +44,8 @@ jobs:
           output-file: "hadolint-output.json"
           no-fail: true
 
-      - name: List files
-        env:
-          SONAR_TOKEN_S: ${{ secrets.SONAR_TOKEN }}
-          SONAR_TOKEN_V: ${{ vars.SONAR_TOKEN }}
-        run: |
-          pwd
-          ls -la
-          cat sonar-project.properties
-          echo $SONAR_TOKEN_S
-          echo $SONAR_TOKEN_V
-
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.1.1
-        with:
-          args: -X
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
@@ -76,7 +63,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v1
         if: always()
         with:
-          files: code/test-report.xml
+          files: test-report.xml
 
   notify:
     if: always()
