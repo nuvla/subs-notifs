@@ -44,10 +44,33 @@ jobs:
           output-file: "hadolint-output.json"
           no-fail: true
 
+      - name: Project version
+        id: project_version
+        run: |
+          VERSION=$( cat version.txt )
+          echo "::set-output name=version::$VERSION"
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.1.1
+        with:
+          args:
+            -Dsonar.projectVersion=${{ steps.project_version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
+
+      - name: jq for SonarQube Quality Gate check
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: SonarQube Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
+        # Force to fail step after specific time
+        timeout-minutes: 5
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
           SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
 
       - name: Multi-arch docker image build prerequired
