@@ -44,6 +44,12 @@ jobs:
           output-file: "hadolint-output.json"
           no-fail: true
 
+      - name: List files
+        run: |
+          pwd
+          ls -la
+          cat sonar-project.properties
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         with:
