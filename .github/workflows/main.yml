@@ -57,9 +57,9 @@ jobs:
         uses: SonarSource/sonarcloud-github-action@master
         with:
           args: >
-            --Dsonar.organization=nuvla 
-            --Dsonar.projectKey=nuvla_subs-notifs 
-            --Dsonar.verbose=true 
+            -Dsonar.organization=nuvla 
+            -Dsonar.projectKey=nuvla_subs-notifs 
+            -Dsonar.verbose=true 
             -X
           projectBaseDir: .
         env:
