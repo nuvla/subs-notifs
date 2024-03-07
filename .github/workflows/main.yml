@@ -48,7 +48,7 @@ jobs:
         id: project_version
         run: |
           VERSION=$( cat version.txt )
-          echo "::set-output name=version::$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.1.1
