@@ -152,6 +152,39 @@ def to_timestamp_utc(ts: str) -> str:
     return ts + 'Z'
 
 
+class DataRecordEventNotification(dict):
+
+    def __init__(self, sc: SubscriptionCfg, event: Event):
+        notif = {'id': sc['id'],
+                 'subs_id': sc['id'],
+                 'subs_name': sc['name'],
+                 'method_ids': sc['method-ids'],
+                 'subs_description': sc['description'],
+                 'resource_uri': f'api/{event.resource_id()}',
+                 'metric': 'content-type',
+                 'condition': sc['criteria']['condition'],
+                 'condition_value': str(sc['criteria'].get('value', '')),
+                 'value': 'true',
+                 'timestamp': to_timestamp_utc(event.timestamp()),
+                 'recovery': True}
+
+        try:
+            content = event.resource_content()
+        except Exception:
+            content = {}
+        try:
+            resource_name = content.get('name', event.name())
+        except Exception:
+            resource_name = ''
+        try:
+            resource_description = content.get('description', event.description())
+        except Exception:
+            resource_description = resource_name
+        notif['resource_name'] = resource_name
+        notif['resource_description'] = resource_description
+        super().__init__(notif)
+
+
 class BlackboxEventNotification(dict):
 
     def __init__(self, sc: SubscriptionCfg, event: Event):

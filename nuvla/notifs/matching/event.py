@@ -12,7 +12,7 @@ from nuvla.notifs.notification import BlackboxEventNotification, \
     AppPublishedDeploymentsUpdateNotification, \
     AppPublishedAppsBouquetUpdateNotification, \
     AppAppBqPublishedDeploymentGroupUpdateNotification, \
-    TestEventNotification
+    TestEventNotification, DataRecordEventNotification
 from nuvla.notifs.nuvla_api import init_nuvla_api
 from nuvla.notifs.nuvla_api import Api as Nuvla, APP_TYPE_K8S, APP_TYPE_DOCKER
 
@@ -40,15 +40,57 @@ class EventSubsCfgMatcher:
         return list(self._trscm.resource_subscriptions(self._e, subs_cfgs))
 
     #
+    # Data record created
+
+    def notif_build_data_record(self,
+                                sc: SubscriptionCfg) -> DataRecordEventNotification:
+        return DataRecordEventNotification(sc, self._e)
+
+    def is_event_data_record_created(self):
+        return self._e.content_match_href('^data-record/.*') and \
+            self._e.content_is_state('created')
+
+    @staticmethod
+    def _str_cond_match(sc: SubscriptionCfg, value) -> bool:
+        cond = sc.criteria_condition()
+        cond_val = sc.criteria_value()
+        return cond == 'is' and cond_val == value or \
+            cond == 'is not' and cond_val != value or \
+            cond == 'contains' and cond_val in value or \
+            cond == 'starts with' and value.startswith(cond_val) or \
+            cond == 'ends with' and value.endswith(cond_val)
+
+    def match_data_record(self, subs_cfgs: List[SubscriptionCfg]) -> \
+            List[DataRecordEventNotification]:
+        if not self.is_event_data_record_created():
+            return []
+
+        res: List[DataRecordEventNotification] = []
+        subs_on_resource = self.resource_subscriptions(subs_cfgs)
+        if log.level == logging.DEBUG:
+            log.debug('Active subscriptions on %s: %s',
+                      self.event_id(), [x.get('id') for x in subs_on_resource])
+        for sc in subs_on_resource:
+            if log.level == logging.DEBUG:
+                log.debug('Matching subscription %s on %s', sc.get("id"),
+                          self.event_id())
+            metric = 'content-type'
+            value = self._e.resource_content().get(metric, '')
+            if sc.criteria_metric() == metric and self._str_cond_match(sc, value):
+                res.append(self.notif_build_data_record(sc))
+
+        return res
+
+    #
     # BlackBox created
 
-    def notif_build_blackbox(self,
-                             sc: SubscriptionCfg) -> BlackboxEventNotification:
+    def notif_build_blackbox(self, sc: SubscriptionCfg) -> \
+            BlackboxEventNotification:
         return BlackboxEventNotification(sc, self._e)
 
     def is_event_blackbox_created(self):
-        return self._e.content_match_href('^data-record/.*') and \
-            self._e.content_is_state('created')
+        return self.is_event_data_record_created() and \
+            self._e.tags_contains('application/blackbox')
 
     def is_event_test_notification(self):
         return self._e.is_name('test.notification')
