@@ -124,6 +124,8 @@ def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
     matcher = EventSubsCfgMatcher(Event(event))
     if matcher.is_event_blackbox_created():
         notifs = matcher.match_blackbox(subs_cfgs)
+    elif matcher.is_event_data_record_created():
+        notifs = matcher.match_data_record(subs_cfgs)
     elif matcher.is_event_module_published():
         notifs = matcher.match_module_published(subs_cfgs)
     elif matcher.is_event_test_notification():
