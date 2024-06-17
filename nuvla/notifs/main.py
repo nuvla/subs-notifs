@@ -122,9 +122,7 @@ def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
     log.info('Got event: %s', event)
 
     matcher = EventSubsCfgMatcher(Event(event))
-    if matcher.is_event_blackbox_created():
-        notifs = matcher.match_blackbox(subs_cfgs)
-    elif matcher.is_event_data_record_created():
+    if matcher.is_event_data_record_created():
         notifs = matcher.match_data_record(subs_cfgs)
     elif matcher.is_event_module_published():
         notifs = matcher.match_module_published(subs_cfgs)

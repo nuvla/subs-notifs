@@ -12,6 +12,7 @@ from nuvla.notifs.notification import NuvlaEdgeNotification, \
 
 log = get_logger('matcher-ne_telelem')
 
+
 def metric_not_found_ex_handler(func):
     def wrapper(*args, **kwargs):
         try:
