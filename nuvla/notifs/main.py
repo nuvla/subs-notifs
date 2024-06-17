@@ -159,7 +159,9 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                 subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
 
             process_event(msg.value, subs_cfgs_events, notif_publisher)
-            PROCESSING_TIME.labels('Event', f'{msg.value["name"]} - {msg.key}').set(time.time() - start)
+
+            lbl = f'{msg.value.get("name", "")} - {msg.key}'
+            PROCESSING_TIME.labels('Event', lbl).set(time.time() - start)
             PACKETS_PROCESSED.labels('Event', f'{msg.key}').inc()
             PROCESS_STATES.state('idle')
         except Exception as ex:
