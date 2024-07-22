@@ -21,10 +21,6 @@ log = get_logger('matcher-event')
 
 class EventSubsCfgMatcher:
 
-    APP_SIMPLE = [APP_TYPE_DOCKER,
-                  APP_TYPE_K8S]
-    APP_BOUQUET = ['applications_sets']
-
     def __init__(self, event: Event):
         self._e = event
         self._rscm = ResourceSubsCfgMatcher()
@@ -42,9 +38,8 @@ class EventSubsCfgMatcher:
     #
     # Data record created
 
-    @staticmethod
-    def is_event_data_record_created(event: Event):
-        return DataRecordMatcher.is_event_data_record_created(event)
+    def is_event_data_record_created(self):
+        return DataRecordMatcher.is_event_data_record_created(self._e)
 
     def match_data_record(self, subs_cfgs: List[SubscriptionCfg]) -> \
             List[DataRecordEventNotification]:
@@ -79,13 +74,132 @@ class EventSubsCfgMatcher:
     #
     # module.publish
 
+    def is_event_module_published(self) -> bool:
+        return ModulePublishMatcher.is_event_module_published(self._e)
+
+    def match_module_published(self, subs_cfgs: List[SubscriptionCfg]) -> \
+            List[Union[AppPublishedDeploymentsUpdateNotification,
+            AppAppBqPublishedDeploymentGroupUpdateNotification,
+            AppPublishedAppsBouquetUpdateNotification]]:
+        """
+        There are two types of modules that can be published:
+        * application
+        * applications_sets
+
+        A. When application gets published, three types of notifications are
+        possible:
+        1. simple deployment needs to be updated
+        2. deployment group needs to be updated
+        3. application bouquet needs to be updated
+
+        B. When application bouquet gets published, single notification is
+        possible:
+        1. deployment group needs to be updated
+
+        The following notifications will be produced:
+
+        A.1 - user receives a link to UI Deployments page with all simple
+              deployments pre-selected for a bulk update.
+        A.2 - user receives a link to the concrete deployment group details page
+              that needs to be updated. On the deployment group we need to
+              highlight the application that triggered the notification as it
+              might need attention.
+        A.3 - same as A.2, but on the application bouquet details page.
+
+        B.1 - user receives a link to the concrete deployment group that needs
+              to be updated. In the deployment group we need to highlight the
+              application bouquet that triggered the notification as it might
+              need attention.
+
+        :param subs_cfgs: list of subscriptions
+        :return: list: notification objects
+        """
+
+        matcher = ModulePublishMatcher()
+
+        if not matcher.is_event_module_published(self._e):
+            return []
+
+        log.debug('Matching module publish event.')
+
+        module_subtype = matcher.get_module_subtype(self._e)
+        module_id = self.event_resource_id()
+
+        nuvla = init_nuvla_api()
+
+        return matcher.match_app_published(nuvla, subs_cfgs,
+                                           module_id, module_subtype)
+
+
+class DataRecordMatcher:
+
+    @staticmethod
+    def is_event_data_record_created(event: Event):
+        return event.content_match_href('^data-record/.*') and \
+            event.content_is_state('created')
+
+    @staticmethod
+    def _str_cond_match(sc: SubscriptionCfg, value) -> bool:
+        cond = sc.criteria_condition()
+        cond_val = sc.criteria_value()
+        return cond == 'is' and cond_val == value or \
+            cond == 'is not' and cond_val != value or \
+            cond == 'contains' and cond_val in value or \
+            cond == 'starts with' and value.startswith(cond_val) or \
+            cond == 'ends with' and value.endswith(cond_val)
+
+    def match(self, event: Event, subs_on_resource: List[SubscriptionCfg]) -> \
+            List[DataRecordEventNotification]:
+        # we are matching only on the elements of resource content
+        try:
+            content = event.resource_content()
+        except KeyError:
+            log.warning('No resource content in event %s', event.id())
+            return []
+
+        # there should be subscriptions on the event
+        if not subs_on_resource:
+            log.warning('No active subscriptions on %s', event.id())
+            return []
+        if log.level == logging.DEBUG:
+            log.debug('Active subscriptions on %s: %s',
+                      event.id(), [x.get('id') for x in subs_on_resource])
+
+        EventNotifTypes = Union[DataRecordEventNotification,
+                                BlackboxEventNotification]
+        notifs: List[EventNotifTypes] = []
+
+        for sc in subs_on_resource:
+            if log.level == logging.DEBUG:
+                log.debug('Matching subscription %s on %s', sc.get("id"),
+                          event.id())
+            metric = sc.criteria_metric()
+            value = content.get(metric)
+            if value is None:
+                log.warning('No value for metric %s in event %s', metric,
+                            event.id())
+                continue
+            if self._str_cond_match(sc, value):
+                if metric == 'content-type' and value == 'application/blackbox':
+                    notifs.append(BlackboxEventNotification(sc, event))
+                else:
+                    notifs.append(DataRecordEventNotification(sc, event))
+
+        return notifs
+
+
+class ModulePublishMatcher:
+
+    APP_SIMPLE = [APP_TYPE_DOCKER,
+                  APP_TYPE_K8S]
+    APP_BOUQUET = ['applications_sets']
+
     MODULE_PUBLISHED_CRITERIA = 'module.publish'
 
-    # predicates
-
-    def is_event_module_published(self) -> bool:
-        return self._e.is_name(self.MODULE_PUBLISHED_CRITERIA) and \
-            self._e.is_successful()
+    @classmethod
+    def is_event_module_published(cls, event: Event) -> bool:
+        return event.is_name(cls.MODULE_PUBLISHED_CRITERIA) and \
+            event.is_successful()
 
     @classmethod
     def _is_event_module_publish_subscription(cls, subs_cfg: SubscriptionCfg) \
@@ -98,14 +212,14 @@ class EventSubsCfgMatcher:
 
     @classmethod
     def _is_event_module_publish_deployment_subscription(cls,
-            subs_cfg: SubscriptionCfg) -> bool:
+                                                         subs_cfg: SubscriptionCfg) -> bool:
         return cls._is_event_module_publish_subscription(subs_cfg) and \
             subs_cfg.criteria_value() == \
             f'{cls.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_DEPLOYMENT}'
 
     @classmethod
     def _is_event_module_publish_appsbouquet_subscription(cls,
-            subs_cfg: SubscriptionCfg) -> bool:
+                                                          subs_cfg: SubscriptionCfg) -> bool:
         return cls._is_event_module_publish_subscription(subs_cfg) and \
             subs_cfg.criteria_value() == \
             f'{cls.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_APPLICATION_BOUQUET}'
@@ -114,13 +228,13 @@ class EventSubsCfgMatcher:
 
     @classmethod
     def filter_event_module_publish_deployment_subscriptions(cls,
-            subs_cfgs: List[SubscriptionCfg]) -> List[SubscriptionCfg]:
+                                                             subs_cfgs: List[SubscriptionCfg]) -> List[SubscriptionCfg]:
         return list(filter(
             cls._is_event_module_publish_deployment_subscription, subs_cfgs))
 
     @classmethod
     def filter_event_module_publish_appsbouquet_subscriptions(cls,
-            subs_cfgs: List[SubscriptionCfg]) -> List[SubscriptionCfg]:
+                                                              subs_cfgs: List[SubscriptionCfg]) -> List[SubscriptionCfg]:
         return list(filter(
             cls._is_event_module_publish_appsbouquet_subscription, subs_cfgs))
 
@@ -128,7 +242,7 @@ class EventSubsCfgMatcher:
 
     @staticmethod
     def find_simple_deployments_by_application(nuvla: Nuvla, module_id: str,
-            acl_owners: Set) -> List[dict]:
+                                               acl_owners: Set) -> List[dict]:
         """
         Given ID of the module of subtype 'application' and a set of owners,
         finds simple deployments that were started from this module and that
@@ -156,7 +270,7 @@ class EventSubsCfgMatcher:
 
     @staticmethod
     def find_deployment_groups_by_application(nuvla: Nuvla, module_id: str,
-            acl_owners: Set) -> List[dict]:
+                                              acl_owners: Set) -> List[dict]:
         """
         Only deployment groups that have "virtual" application sets are returned.
 
@@ -204,7 +318,7 @@ class EventSubsCfgMatcher:
 
     @staticmethod
     def find_deployment_groups_by_application_set(nuvla: Nuvla, module_id: str,
-            acl_owners: Set) -> List[dict]:
+                                                  acl_owners: Set) -> List[dict]:
         """
         Given ID of the module of subtype 'applications_sets' and a set of owners,
         finds deployment groups that were started from this module and that
@@ -227,7 +341,6 @@ class EventSubsCfgMatcher:
         if res:
             return [r.data for r in res.resources]
         return []
-
 
     @staticmethod
     def find_apps_bouquets_by_application(nuvla: Nuvla, app_id: str,
@@ -272,8 +385,9 @@ class EventSubsCfgMatcher:
 
     # Helper methods.
 
-    def get_module_subtype(self) -> Union[str, None]:
-        content = self._e.resource_content()
+    @staticmethod
+    def get_module_subtype(event: Event) -> Union[str, None]:
+        content = event.resource_content()
         if content:
             return content.get('subtype')
         return None
@@ -308,7 +422,7 @@ class EventSubsCfgMatcher:
     # Notification producers.
 
     def notifs_to_update_simple_deployments_from_app(self, nuvla: Nuvla, module_id: str,
-            subs_cfgs: List[SubscriptionCfg]) -> \
+                                                     subs_cfgs: List[SubscriptionCfg]) -> \
             List[AppPublishedDeploymentsUpdateNotification]:
         """
         A.1
@@ -355,7 +469,7 @@ class EventSubsCfgMatcher:
         return notifs
 
     def notifs_to_update_deployment_group_from_app(self, nuvla: Nuvla, module_id: str,
-            subs_cfgs: List[SubscriptionCfg]) -> \
+                                                   subs_cfgs: List[SubscriptionCfg]) -> \
             List[AppAppBqPublishedDeploymentGroupUpdateNotification]:
         """
         A.2
@@ -422,7 +536,7 @@ class EventSubsCfgMatcher:
         acl_owners = collection_all_owners(subs_apps_bq_published)
 
         app_bqs_to_notify = self.find_apps_bouquets_by_application(nuvla, module_id,
-                                                                acl_owners)
+                                                                   acl_owners)
         if not app_bqs_to_notify:
             log.warning('No apps bouquets found on %s for %s', module_id, acl_owners)
             return []
@@ -438,7 +552,8 @@ class EventSubsCfgMatcher:
                             app_bq, sc, self._e))
         return notifs
 
-    def notifs_to_update_deployment_group_from_app_bq(self, nuvla: Nuvla, module_id: str,
+    def notifs_to_update_deployment_group_from_app_bq(
+            self, nuvla: Nuvla, module_id: str,
             subs_cfgs: List[SubscriptionCfg]) -> \
             List[AppAppBqPublishedDeploymentGroupUpdateNotification]:
         """
@@ -498,8 +613,8 @@ class EventSubsCfgMatcher:
             self._match_app_published_app_bq(notifs, nuvla, module_id,
                                              subs_cfgs)
         else:
-           log.warning(f'Unknown module subtype: {module_subtype}. '
-                       f'Non notifications produced.')
+            log.warning(f'Unknown module subtype: {module_subtype}. '
+                        f'Non notifications produced.')
 
         return notifs
 
@@ -542,111 +657,3 @@ class EventSubsCfgMatcher:
             log.exception(
                 'Failed reconciling for application bouquets on app: %s',
                 exc_info=ex)
-
-    def match_module_published(self, subs_cfgs: List[SubscriptionCfg]) -> \
-            List[Union[AppPublishedDeploymentsUpdateNotification,
-            AppAppBqPublishedDeploymentGroupUpdateNotification,
-            AppPublishedAppsBouquetUpdateNotification]]:
-        """
-        There are two types of modules that can be published:
-        * application
-        * applications_sets
-
-        A. When application gets published, three types of notifications are
-        possible:
-        1. simple deployment needs to be updated
-        2. deployment group needs to be updated
-        3. application bouquet needs to be updated
-
-        B. When application bouquet gets published, single notification is
-        possible:
-        1. deployment group needs to be updated
-
-        The following notifications will be produced:
-
-        A.1 - user receives a link to UI Deployments page with all simple
-              deployments pre-selected for a bulk update.
-        A.2 - user receives a link to the concrete deployment group details page
-              that needs to be updated. On the deployment group we need to
-              highlight the application that triggered the notification as it
-              might need attention.
-        A.3 - same as A.2, but on the application bouquet details page.
-
-        B.1 - user receives a link to the concrete deployment group that needs
-              to be updated. In the deployment group we need to highlight the
-              application bouquet that triggered the notification as it might
-              need attention.
-
-        :param subs_cfgs: list of subscriptions
-        :return: list: notification objects
-        """
-
-        if not self.is_event_module_published():
-            return []
-
-        log.debug('Matching module publish event.')
-
-        module_subtype = self.get_module_subtype()
-        module_id = self.event_resource_id()
-
-        nuvla = init_nuvla_api()
-
-        return self.match_app_published(nuvla, subs_cfgs,
-                                        module_id, module_subtype)
-
-
-class DataRecordMatcher:
-
-    @staticmethod
-    def is_event_data_record_created(event: Event):
-        return event.content_match_href('^data-record/.*') and \
-            event.content_is_state('created')
-
-    @staticmethod
-    def _str_cond_match(sc: SubscriptionCfg, value) -> bool:
-        cond = sc.criteria_condition()
-        cond_val = sc.criteria_value()
-        return cond == 'is' and cond_val == value or \
-            cond == 'is not' and cond_val != value or \
-            cond == 'contains' and cond_val in value or \
-            cond == 'starts with' and value.startswith(cond_val) or \
-            cond == 'ends with' and value.endswith(cond_val)
-
-    def match(self, event: Event, subs_on_resource: List[SubscriptionCfg]) -> \
-            List[DataRecordEventNotification]:
-        # we are matching only on the elements of resource content
-        try:
-            content = event.resource_content()
-        except KeyError:
-            log.warning('No resource content in event %s', event.id())
-            return []
-
-        # there should be subscriptions on the event
-        if not subs_on_resource:
-            log.warning('No active subscriptions on %s', event.id())
-            return []
-        if log.level == logging.DEBUG:
-            log.debug('Active subscriptions on %s: %s',
-                      event.id(), [x.get('id') for x in subs_on_resource])
-
-        EventNotifTypes = Union[DataRecordEventNotification,
-                                BlackboxEventNotification]
-        notifs: List[EventNotifTypes] = []
-
-        for sc in subs_on_resource:
-            if log.level == logging.DEBUG:
-                log.debug('Matching subscription %s on %s', sc.get("id"),
-                          event.id())
-            metric = sc.criteria_metric()
-            value = content.get(metric)
-            if value is None:
-                log.warning('No value for metric %s in event %s', metric,
-                            event.id())
-                continue
-            if self._str_cond_match(sc, value):
-                if metric == 'content-type' and value == 'application/blackbox':
-                    notifs.append(BlackboxEventNotification(sc, event))
-                else:
-                    notifs.append(DataRecordEventNotification(sc, event))
-
-        return notifs
