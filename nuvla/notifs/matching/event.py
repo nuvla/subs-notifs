@@ -42,6 +42,10 @@ class EventSubsCfgMatcher:
     #
     # Data record created
 
+    @staticmethod
+    def is_event_data_record_created(event: Event):
+        return DataRecordMatcher.is_event_data_record_created(event)
+
     def match_data_record(self, subs_cfgs: List[SubscriptionCfg]) -> \
             List[DataRecordEventNotification]:
         matcher = DataRecordMatcher()
