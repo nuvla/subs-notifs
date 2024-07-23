@@ -1,7 +1,9 @@
 import unittest
 
-from nuvla.notifs.matching.event import EventSubsCfgMatcher, APP_TYPE_K8S, \
-    APP_TYPE_DOCKER
+from nuvla.notifs.matching.event import (EventSubsCfgMatcher,
+                                         ModulePublishMatcher,
+                                         APP_TYPE_K8S,
+                                         APP_TYPE_DOCKER)
 from nuvla.notifs.models.event import Event
 from nuvla.notifs.models.subscription import SubscriptionCfg, \
     RESOURCE_KIND_APPLICATION_BOUQUET, RESOURCE_KIND_DEPLOYMENT
@@ -287,15 +289,15 @@ class TestModulePublished(unittest.TestCase):
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA
+                    'value': ModulePublishMatcher.MODULE_PUBLISHED_CRITERIA
                 }
             }
         )
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_no_resource_kind]))
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_no_resource_kind]))
 
         subs_cfg_disabled_appsbq = SubscriptionCfg(
@@ -306,12 +308,12 @@ class TestModulePublished(unittest.TestCase):
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA
+                    'value': ModulePublishMatcher.MODULE_PUBLISHED_CRITERIA
                 }
             }
         )
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_disabled_appsbq]))
 
         subs_cfg_disabled_depl = SubscriptionCfg(
@@ -322,19 +324,19 @@ class TestModulePublished(unittest.TestCase):
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA
+                    'value': ModulePublishMatcher.MODULE_PUBLISHED_CRITERIA
                 }
             }
         )
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_disabled_depl]))
 
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_disabled_appsbq, subs_cfg_no_resource_kind]))
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_disabled_depl, subs_cfg_no_resource_kind]))
 
         subs_cfg_not_published_depl = SubscriptionCfg(
@@ -350,7 +352,7 @@ class TestModulePublished(unittest.TestCase):
             }
         )
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_not_published_depl]))
 
         subs_cfg_not_published_appsbq = SubscriptionCfg(
@@ -366,7 +368,7 @@ class TestModulePublished(unittest.TestCase):
             }
         )
         assert 0 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_not_published_appsbq]))
 
     def test_filter_module_publish_subscriptions_match(self):
@@ -381,12 +383,12 @@ class TestModulePublished(unittest.TestCase):
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': f'{EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_APPLICATION_BOUQUET}'
+                    'value': f'{ModulePublishMatcher.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_APPLICATION_BOUQUET}'
                 }
             }
         )
         assert 1 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_appsbq]))
 
         subs_cfg_depl = SubscriptionCfg(
@@ -397,32 +399,34 @@ class TestModulePublished(unittest.TestCase):
                     'metric': 'name',
                     'kind': 'string',
                     'condition': 'is',
-                    'value': f'{EventSubsCfgMatcher.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_DEPLOYMENT}'
+                    'value': f'{ModulePublishMatcher.MODULE_PUBLISHED_CRITERIA}.{RESOURCE_KIND_DEPLOYMENT}'
                 }
             }
         )
         assert 1 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_depl]))
 
         assert 1 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_appsbouquet_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_appsbouquet_subscriptions(
                 [subs_cfg_appsbq, subs_cfg_depl]))
 
         assert 1 == len(
-            EventSubsCfgMatcher.filter_event_module_publish_deployment_subscriptions(
+            ModulePublishMatcher.filter_event_module_publish_deployment_subscriptions(
                 [subs_cfg_appsbq, subs_cfg_depl]))
 
     def test_detect_kubernetes_app(self):
-        matcher = EventSubsCfgMatcher(Event())
-        matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['foo'])
-        notifs = matcher.match_app_published(object, object, '', APP_TYPE_K8S)
+        matcher = ModulePublishMatcher()
+        matcher._match_app_published_app_simple = lambda n,a,b,c,d: n.extend(['foo'])
+        notifs = matcher.match_app_published(object, object, '',
+                                             APP_TYPE_K8S, Event())
         assert notifs == ['foo']
 
     def test_detect_docker_app(self):
-        matcher = EventSubsCfgMatcher(Event())
-        matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['bar'])
-        notifs = matcher.match_app_published(object, object, '', APP_TYPE_DOCKER)
+        matcher = ModulePublishMatcher()
+        matcher._match_app_published_app_simple = lambda n,a,b,c,d: n.extend(['bar'])
+        notifs = matcher.match_app_published(object, object, '',
+                                             APP_TYPE_DOCKER, Event())
         assert notifs == ['bar']
 
 
