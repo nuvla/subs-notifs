@@ -417,14 +417,16 @@ class TestModulePublished(unittest.TestCase):
 
     def test_detect_kubernetes_app(self):
         matcher = ModulePublishMatcher()
-        matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['foo'])
-        notifs = matcher.match_app_published(object, object, '', APP_TYPE_K8S)
+        matcher._match_app_published_app_simple = lambda n,a,b,c,d: n.extend(['foo'])
+        notifs = matcher.match_app_published(object, object, '',
+                                             APP_TYPE_K8S, Event())
         assert notifs == ['foo']
 
     def test_detect_docker_app(self):
         matcher = ModulePublishMatcher()
-        matcher._match_app_published_app_simple = lambda n,a,b,c: n.extend(['bar'])
-        notifs = matcher.match_app_published(object, object, '', APP_TYPE_DOCKER)
+        matcher._match_app_published_app_simple = lambda n,a,b,c,d: n.extend(['bar'])
+        notifs = matcher.match_app_published(object, object, '',
+                                             APP_TYPE_DOCKER, Event())
         assert notifs == ['bar']
 
 
