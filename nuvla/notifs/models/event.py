@@ -35,3 +35,6 @@ class Event(Resource):
 
     def is_category(self, category):
         return category == self['category']
+
+    def tags_contains(self, tag):
+        return tag in self['tags']

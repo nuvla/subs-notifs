@@ -112,28 +112,29 @@ class NuvlaEdgeMetrics(Resource):
     @key_error_ex_handler
     def _load_pct(self, what: str) -> Union[None, float]:
         if not self.get(what):
-            return
+            return None
         cpu = self[what]['CPU']
         if not cpu:
-            return
+            return None
         return 100 * cpu['load'] / cpu['capacity']
 
     @key_error_ex_handler
     def _ram_pct(self, what: str) -> Union[None, float]:
         if not self.get(what):
-            return
+            return None
         ram = self[what]['RAM']
         if not ram:
-            return
+            return None
         return 100 * ram['used'] / ram['capacity']
 
     @key_error_ex_handler
     def _disk_pct(self, what: str, disk_name: str) -> Union[None, float]:
         if not self.get(what):
-            return
+            return None
         for disk in self[what].get('DISKS', []):
             if disk_name == disk['device']:
                 return 100 * disk['used'] / disk['capacity']
+        return None
 
     def load_pct_curr(self) -> float:
         return self._load_pct(self.RESOURCES_KEY)

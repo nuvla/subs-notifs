@@ -122,8 +122,8 @@ def process_event(event: dict, subs_cfgs: List[SubscriptionCfg],
     log.info('Got event: %s', event)
 
     matcher = EventSubsCfgMatcher(Event(event))
-    if matcher.is_event_blackbox_created():
-        notifs = matcher.match_blackbox(subs_cfgs)
+    if matcher.is_event_data_record_created():
+        notifs = matcher.match_data_record(subs_cfgs)
     elif matcher.is_event_module_published():
         notifs = matcher.match_module_published(subs_cfgs)
     elif matcher.is_event_test_notification():
@@ -157,7 +157,9 @@ def subs_notif_event(subs_cfgs: SelfUpdatingSubsCfgs):
                 subs_cfgs_events.extend(list(subs_cfgs.get(rk, {}).values()))
 
             process_event(msg.value, subs_cfgs_events, notif_publisher)
-            PROCESSING_TIME.labels('Event', f'{msg.value["name"]} - {msg.key}').set(time.time() - start)
+
+            lbl = f'{msg.value.get("name", "")} - {msg.key}'
+            PROCESSING_TIME.labels('Event', lbl).set(time.time() - start)
             PACKETS_PROCESSED.labels('Event', f'{msg.key}').inc()
             PROCESS_STATES.state('idle')
         except Exception as ex:
