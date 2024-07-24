@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.1.0] - 2024-07-24
+
+- Added matching for data record creation.
+
 ## [0.0.21] - 2024-02-21
 
 ### Change
